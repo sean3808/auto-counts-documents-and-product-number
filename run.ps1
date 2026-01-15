@@ -27,9 +27,9 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidateSet("phase1", "phase2", "all")]
-    [string]$Command
+    [string]$Command = "all"
 )
 
 $ErrorActionPreference = "Stop"

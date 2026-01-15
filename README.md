@@ -24,8 +24,11 @@ uv sync --extra dev
 # Phase 2: 產生 Excel 明細
 .\run.ps1 phase2
 
-# 一鍵執行
+# 一鍵執行（預設值）
 .\run.ps1 all
+
+# 不帶參數時預設為 all
+.\run.ps1
 ```
 
 或用 Python 執行：

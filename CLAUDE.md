@@ -193,4 +193,4 @@ uv run pytest tests/test_pdf_parser.py -v
 
 - 框架：pytest
 - 測試樣本：`tests/fixtures/`
-- 目前 30 個測試案例，全數通過
+- 目前 31 個測試案例，全數通過
