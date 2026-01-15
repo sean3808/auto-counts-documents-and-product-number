@@ -4,6 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
+_SEPARATOR = "=" * 80
+_SEPARATOR_THIN = "-" * 80
+
 
 class ProcessLogger:
     """處理過程的 Logger，輸出到檔案和控制台"""
@@ -23,10 +26,11 @@ class ProcessLogger:
         self.log_file = open(self.log_path, "w", encoding="utf-8-sig")
         self._reset_counts()
 
-        header = f"""================================================================================
-執行時間: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = f"""{_SEPARATOR}
+執行時間: {now}
 執行階段: {phase}
-================================================================================
+{_SEPARATOR}
 """
         self._write(header)
 
@@ -68,30 +72,22 @@ class ProcessLogger:
 
     def finish(self, phase: str) -> int:
         """結束記錄，回傳退出碼"""
-        summary = f"""
---------------------------------------------------------------------------------
-{phase} 完成: 成功 {self.success_count}, 跳過 {self.skip_count}, 失敗 {self.fail_count}
-================================================================================
-"""
+        counts = f"成功 {self.success_count}, 跳過 {self.skip_count}, 失敗 {self.fail_count}"
+        summary = f"\n{_SEPARATOR_THIN}\n{phase} 完成: {counts}\n{_SEPARATOR}\n"
         self._write(summary)
 
         if self.log_file:
             self.log_file.close()
             self.log_file = None
 
-        # 決定退出碼
         if self.fail_count > 0 and self.success_count == 0:
             return 2  # 完全失敗
-        elif self.skip_count > 0 or self.fail_count > 0:
+        if self.skip_count > 0 or self.fail_count > 0:
             return 1  # 部分失敗
         return 0  # 成功
 
     def continue_phase(self, phase: str) -> None:
         """繼續記錄下一個階段（用於 all 命令）"""
         self._reset_counts()
-        header = f"""
-================================================================================
-執行階段: {phase}
-================================================================================
-"""
+        header = f"\n{_SEPARATOR}\n執行階段: {phase}\n{_SEPARATOR}\n"
         self._write(header)

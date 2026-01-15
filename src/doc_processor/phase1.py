@@ -23,6 +23,13 @@ DOC_TYPE_ORDER = {
 }
 
 
+def _doc_sort_key(doc: ParsedDocument) -> tuple[str, int, str]:
+    """產生單據排序的 key"""
+    doc_no = doc.goods_receipt_no or doc.receipt_inspection_no or ""
+    page_idx = doc.page_index if doc.page_index is not None else -1
+    return (doc_no, page_idx, doc.path.name)
+
+
 @dataclass
 class DocumentGroup:
     """同一採購單號的單據組"""
@@ -34,66 +41,40 @@ class DocumentGroup:
 
     def add_document(self, doc: ParsedDocument) -> None:
         """將單據加入對應的列表"""
-        if doc.doc_type == DocType.GOODS_RECEIPT:
-            self.goods_receipts.append(doc)
-        elif doc.doc_type == DocType.RECEIPT_INSPECTION:
-            self.receipt_inspections.append(doc)
-        elif doc.doc_type == DocType.PURCHASE_ORDER:
-            self.purchase_orders.append(doc)
-        elif doc.doc_type == DocType.PURCHASE_REQUEST:
-            self.purchase_requests.append(doc)
+        doc_type_to_list = {
+            DocType.GOODS_RECEIPT: self.goods_receipts,
+            DocType.RECEIPT_INSPECTION: self.receipt_inspections,
+            DocType.PURCHASE_ORDER: self.purchase_orders,
+            DocType.PURCHASE_REQUEST: self.purchase_requests,
+        }
+        target_list = doc_type_to_list.get(doc.doc_type)
+        if target_list is not None:
+            target_list.append(doc)
 
     def get_sorted_documents(self) -> list[ParsedDocument]:
-        """取得排序後的 PDF 列表"""
-        # 進貨單：依單據號碼升序
-        sorted_receipts = sorted(
+        """取得排序後的 PDF 列表（進貨單 > 進貨驗收單 > 採購單 > 請購單）"""
+        doc_lists = [
             self.goods_receipts,
-            key=lambda d: (
-                d.goods_receipt_no or "",
-                d.page_index if d.page_index is not None else -1,
-                d.path.name,
-            )
-        )
-        # 進貨驗收單：依驗收單號升序
-        sorted_inspections = sorted(
             self.receipt_inspections,
-            key=lambda d: (
-                d.receipt_inspection_no or "",
-                d.page_index if d.page_index is not None else -1,
-                d.path.name,
-            )
-        )
-        sorted_orders = sorted(
             self.purchase_orders,
-            key=lambda d: (
-                d.page_index if d.page_index is not None else -1,
-                d.path.name,
-            )
-        )
-        sorted_requests = sorted(
             self.purchase_requests,
-            key=lambda d: (
-                d.page_index if d.page_index is not None else -1,
-                d.path.name,
-            )
-        )
-        all_docs = (
-            sorted_receipts +
-            sorted_inspections +
-            sorted_orders +
-            sorted_requests
-        )
-        return all_docs
+        ]
+        return [
+            doc
+            for doc_list in doc_lists
+            for doc in sorted(doc_list, key=_doc_sort_key)
+        ]
 
     def get_vendor_info(self) -> tuple[str | None, str | None]:
         """從進貨驗收單取得供商資訊"""
         for doc in self.receipt_inspections:
             if doc.vendor_code and doc.vendor_name:
                 return doc.vendor_code, doc.vendor_name
-        # 只有 vendor_code 的情況
+
         for doc in self.receipt_inspections:
             if doc.vendor_code:
                 return doc.vendor_code, doc.vendor_name
+
         return None, None
 
     def get_stats(self) -> dict[str, int]:

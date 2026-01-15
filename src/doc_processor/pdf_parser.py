@@ -172,6 +172,34 @@ def parse_document(pdf_path: Path) -> ParsedDocument:
     return _parse_document_text(pdf_path, doc_type, text, None)
 
 
+def _find_marker_indices(lines: list[str], marker: str) -> list[int]:
+    """找到所有包含標籤的行索引"""
+    return [i for i, line in enumerate(lines) if marker in line]
+
+
+def _search_value_near_marker(
+    lines: list[str],
+    marker_idx: int,
+    value_regex: re.Pattern,
+    exclude: str | None = None,
+    first_only: bool = False,
+) -> list[str]:
+    """在標籤附近搜尋符合格式的值"""
+    values: list[str] = []
+    search_range = range(marker_idx, min(marker_idx + 25, len(lines)))
+
+    for j in search_range:
+        line = lines[j].strip()
+        if value_regex.match(line):
+            if exclude and line == exclude:
+                continue
+            values.append(line)
+            if first_only:
+                break
+
+    return values
+
+
 def extract_field_value(
     text: str,
     marker: str,
@@ -184,27 +212,15 @@ def extract_field_value(
     PDF 文字提取時，標籤和值可能在不同行，因此：
     1. 先找到標籤所在行
     2. 在標籤附近幾行尋找符合格式的值
-
-    Args:
-        text: PDF 文字內容
-        marker: 標籤文字（如「採購單號」）
-        value_regex: 值的正則表達式
-        exclude: 要排除的值（用於區分格式相同的不同欄位）
     """
     lines = text.split("\n")
 
-    # 找到所有包含標籤的行
-    marker_indices = [i for i, line in enumerate(lines) if marker in line]
-
-    for marker_idx in marker_indices:
-        # 在標籤後的幾行尋找符合格式的值（PDF 提取時標籤和值可能相差較遠）
-        for j in range(marker_idx, min(marker_idx + 25, len(lines))):
-            line = lines[j].strip()
-            if value_regex.match(line):
-                # 排除指定的值
-                if exclude and line == exclude:
-                    continue
-                return line
+    for marker_idx in _find_marker_indices(lines, marker):
+        values = _search_value_near_marker(
+            lines, marker_idx, value_regex, exclude, first_only=True
+        )
+        if values:
+            return values[0]
 
     return None
 
@@ -216,14 +232,10 @@ def extract_field_values(
 ) -> list[str]:
     """從文字中抽取欄位可能值（不去重）"""
     lines = text.split("\n")
-    marker_indices = [i for i, line in enumerate(lines) if marker in line]
     values: list[str] = []
 
-    for marker_idx in marker_indices:
-        for j in range(marker_idx, min(marker_idx + 25, len(lines))):
-            line = lines[j].strip()
-            if value_regex.match(line):
-                values.append(line)
+    for marker_idx in _find_marker_indices(lines, marker):
+        values.extend(_search_value_near_marker(lines, marker_idx, value_regex))
 
     return values
 
@@ -235,15 +247,13 @@ def extract_field_values_first(
 ) -> list[str]:
     """從文字中抽取欄位值（每個標籤只取第一個）"""
     lines = text.split("\n")
-    marker_indices = [i for i, line in enumerate(lines) if marker in line]
     values: list[str] = []
 
-    for marker_idx in marker_indices:
-        for j in range(marker_idx, min(marker_idx + 25, len(lines))):
-            line = lines[j].strip()
-            if value_regex.match(line):
-                values.append(line)
-                break
+    for marker_idx in _find_marker_indices(lines, marker):
+        marker_values = _search_value_near_marker(
+            lines, marker_idx, value_regex, first_only=True
+        )
+        values.extend(marker_values)
 
     return values
 
@@ -439,12 +449,7 @@ def count_document_numbers(text: str) -> int:
 def count_sequence_numbers(text: str) -> int:
     """計算序號數量（支數）：獨立行的 4 位數字"""
     lines = text.split("\n")
-    count = 0
-    for line in lines:
-        line = line.strip()
-        if REGEX_SEQUENCE_NO.match(line):
-            count += 1
-    return count
+    return sum(1 for line in lines if REGEX_SEQUENCE_NO.match(line.strip()))
 
 
 def find_purchase_order_page(pages: list[str]) -> str | None:
