@@ -88,6 +88,10 @@ class ProcessLogger:
 
     def continue_phase(self, phase: str) -> None:
         """繼續記錄下一個階段（用於 all 命令）"""
+        # 若檔案已被 finish() 關閉，重新以 append 模式開啟
+        if self.log_file is None and self.log_path:
+            self.log_file = open(self.log_path, "a", encoding="utf-8-sig")
+
         self._reset_counts()
         header = f"\n{_SEPARATOR}\n執行階段: {phase}\n{_SEPARATOR}\n"
         self._write(header)
