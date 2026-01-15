@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+*.egg
+
+# uv
+.uv/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+~$*
+
+# 專案特定
+input/
+output/
+
+# Excel 臨時檔
+~$*.xlsx
+
+# Claude Code 設定
+.claude/
+
+# 根目錄樣本檔案（僅供本地測試）
+/*.pdf
+/*.jpg
+/業旺明細*.xlsx
+/samples.xlsx
