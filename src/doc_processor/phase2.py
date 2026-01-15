@@ -7,6 +7,7 @@ from .logger import ProcessLogger
 from .pdf_parser import (
     count_document_numbers,
     count_sequence_numbers,
+    extract_purchase_order_nos_from_goods_receipt_pages,
     extract_purchase_order_no_from_filename,
     extract_text,
     extract_text_by_page,
@@ -58,44 +59,75 @@ def run_phase2(
     for pdf_path in pdf_files:
         logger.info(f"處理: {pdf_path.name}")
 
-        # a. 從檔名抽取採購單號
-        purchase_order_no = extract_purchase_order_no_from_filename(pdf_path.name)
-        if not purchase_order_no:
-            logger.error(f"PDF: {pdf_path.name}", "無法從檔名抽取採購單號")
-            continue
-
-        # b. 提取全部文字並計算張數
-        full_text = extract_text(pdf_path)
-        sheet_count = count_document_numbers(full_text)
-
-        if sheet_count == 0:
-            logger.error(f"PDF: {pdf_path.name}", "張數為 0（找不到「單據號碼」）")
-            continue
-
-        # c. 找到採購單頁並計算支數
-        pages = extract_text_by_page(pdf_path)
-        purchase_order_page = find_purchase_order_page(pages)
-
-        if not purchase_order_page:
-            logger.error(f"PDF: {pdf_path.name}", "找不到採購單頁（無「採購日期:」）")
-            continue
-
-        quantity = count_sequence_numbers(purchase_order_page)
-
-        if quantity == 0:
-            logger.error(f"PDF: {pdf_path.name}", "支數為 0（採購單頁找不到序號）")
-            continue
-
-        logger.detail(f"張數: {sheet_count}")
-        logger.detail(f"支數: {quantity}")
-
-        # d. 產生 Excel
-        output_excel = output_dir / f"{purchase_order_no}-單據明細.xlsx"
-
         try:
-            write_summary(template_path, output_excel, quantity, sheet_count)
-            logger.ok(f"輸出: {output_excel.name}")
+            # a. 從檔名抽取採購單號
+            purchase_order_no = extract_purchase_order_no_from_filename(
+                pdf_path.name
+            )
+            if not purchase_order_no:
+                logger.error(f"PDF: {pdf_path.name}", "無法從檔名抽取採購單號")
+                continue
+
+            # b. 提取全部文字並計算張數
+            full_text = extract_text(pdf_path)
+            sheet_count = count_document_numbers(full_text)
+
+            if sheet_count == 0:
+                logger.error(f"PDF: {pdf_path.name}", "張數為 0（找不到「單據號碼」）")
+                continue
+
+            # c. 從進貨單頁抽取採購單號，與檔名 double check
+            pages = extract_text_by_page(pdf_path)
+            purchase_order_nos = extract_purchase_order_nos_from_goods_receipt_pages(
+                pages
+            )
+            if not purchase_order_nos:
+                logger.error(
+                    f"PDF: {pdf_path.name}",
+                    "進貨單頁找不到採購單號",
+                )
+                continue
+            if len(purchase_order_nos) > 1:
+                logger.error(
+                    f"PDF: {pdf_path.name}",
+                    f"進貨單頁出現多個採購單號: {sorted(purchase_order_nos)}",
+                )
+                continue
+            purchase_order_no_in_receipt = next(iter(purchase_order_nos))
+            if purchase_order_no_in_receipt != purchase_order_no:
+                logger.error(
+                    f"PDF: {pdf_path.name}",
+                    "採購單號不一致（檔名與進貨單內文不符）",
+                )
+                continue
+
+            # d. 找到採購單頁並計算支數
+            purchase_order_page = find_purchase_order_page(pages)
+
+            if not purchase_order_page:
+                logger.error(
+                    f"PDF: {pdf_path.name}", "找不到採購單頁（無「採購日期:」）"
+                )
+                continue
+
+            quantity = count_sequence_numbers(purchase_order_page)
+
+            if quantity == 0:
+                logger.error(f"PDF: {pdf_path.name}", "支數為 0（採購單頁找不到序號）")
+                continue
+
+            logger.detail(f"張數: {sheet_count}")
+            logger.detail(f"支數: {quantity}")
+
+            # e. 產生 Excel
+            output_excel = output_dir / f"{purchase_order_no}-單據明細.xlsx"
+
+            try:
+                write_summary(template_path, output_excel, quantity, sheet_count)
+                logger.ok(f"輸出: {output_excel.name}")
+            except Exception as e:
+                logger.error(f"PDF: {pdf_path.name}", f"Excel 寫入失敗: {e}")
         except Exception as e:
-            logger.error(f"PDF: {pdf_path.name}", f"Excel 寫入失敗: {e}")
+            logger.error(f"PDF: {pdf_path.name}", f"處理失敗: {e}")
 
     return logger.finish("Phase 2")

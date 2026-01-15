@@ -8,8 +8,9 @@ from .logger import ProcessLogger
 from .pdf_parser import (
     DocType,
     ParsedDocument,
+    detect_doc_type,
     merge_pdfs,
-    parse_document,
+    parse_documents,
 )
 
 
@@ -42,26 +43,47 @@ class DocumentGroup:
         elif doc.doc_type == DocType.PURCHASE_REQUEST:
             self.purchase_requests.append(doc)
 
-    def get_sorted_paths(self) -> list[Path]:
-        """取得排序後的 PDF 路徑列表"""
+    def get_sorted_documents(self) -> list[ParsedDocument]:
+        """取得排序後的 PDF 列表"""
         # 進貨單：依單據號碼升序
         sorted_receipts = sorted(
             self.goods_receipts,
-            key=lambda d: d.goods_receipt_no or ""
+            key=lambda d: (
+                d.goods_receipt_no or "",
+                d.page_index if d.page_index is not None else -1,
+                d.path.name,
+            )
         )
         # 進貨驗收單：依驗收單號升序
         sorted_inspections = sorted(
             self.receipt_inspections,
-            key=lambda d: d.receipt_inspection_no or ""
+            key=lambda d: (
+                d.receipt_inspection_no or "",
+                d.page_index if d.page_index is not None else -1,
+                d.path.name,
+            )
         )
-        # 採購單和請購單各只有一張
+        sorted_orders = sorted(
+            self.purchase_orders,
+            key=lambda d: (
+                d.page_index if d.page_index is not None else -1,
+                d.path.name,
+            )
+        )
+        sorted_requests = sorted(
+            self.purchase_requests,
+            key=lambda d: (
+                d.page_index if d.page_index is not None else -1,
+                d.path.name,
+            )
+        )
         all_docs = (
             sorted_receipts +
             sorted_inspections +
-            self.purchase_orders +
-            self.purchase_requests
+            sorted_orders +
+            sorted_requests
         )
-        return [doc.path for doc in all_docs]
+        return all_docs
 
     def get_vendor_info(self) -> tuple[str | None, str | None]:
         """從進貨驗收單取得供商資訊"""
@@ -106,11 +128,18 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
     unknown_docs: list[Path] = []
 
     for pdf_path in pdf_files:
-        doc = parse_document(pdf_path)
-        if doc.doc_type == DocType.UNKNOWN:
+        doc_type = detect_doc_type(pdf_path.name)
+        if doc_type == DocType.UNKNOWN:
             unknown_docs.append(pdf_path)
-        else:
-            parsed_docs.append(doc)
+            continue
+
+        try:
+            docs = parse_documents(pdf_path)
+        except Exception as e:
+            logger.error(f"PDF: {pdf_path.name}", f"解析失敗: {e}")
+            continue
+
+        parsed_docs.extend(docs)
 
     # 統計各類型數量
     type_counts = defaultdict(int)
@@ -181,9 +210,9 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
             logger.error(f"採購單組: {po_no}", "找不到供商簡稱")
             continue
 
-        # 取得排序後的 PDF 路徑
-        pdf_paths = group.get_sorted_paths()
-        if not pdf_paths:
+        # 取得排序後的 PDF
+        documents = group.get_sorted_documents()
+        if not documents:
             logger.error(f"採購單組: {po_no}", "沒有可合併的 PDF")
             continue
 
@@ -193,7 +222,7 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
 
         # 合併 PDF
         try:
-            merge_pdfs(pdf_paths, output_path)
+            merge_pdfs(documents, output_path)
             logger.ok(f"輸出: {output_filename}")
         except Exception as e:
             logger.error(f"採購單組: {po_no}", f"PDF 合併失敗: {e}")

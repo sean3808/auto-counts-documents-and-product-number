@@ -9,9 +9,13 @@ from doc_processor.pdf_parser import (
     count_document_numbers,
     count_sequence_numbers,
     detect_doc_type,
+    extract_purchase_order_no_from_goods_receipt_text,
+    extract_purchase_order_nos_from_goods_receipt_pages,
     extract_purchase_order_no_from_filename,
     extract_text,
+    extract_text_by_page,
     find_purchase_order_page,
+    parse_documents,
     parse_document,
 )
 
@@ -126,13 +130,27 @@ class TestFindPurchaseOrderPage:
         if not pdf_path.exists():
             pytest.skip("採購單樣本不存在")
 
-        from doc_processor.pdf_parser import extract_text_by_page
-
         pages = extract_text_by_page(pdf_path)
         page = find_purchase_order_page(pages)
 
         assert page is not None
         assert "採購日期:" in page
+
+    def test_find_page_with_vendor_keyword(self):
+        """測試以廠商關鍵字找到採購單頁"""
+        pages = ["無關內容", "廠商: ABC"]
+
+        page = find_purchase_order_page(pages)
+
+        assert page == "廠商: ABC"
+
+    def test_find_page_with_vendor_signature_keyword(self):
+        """測試以承製廠商簽回關鍵字找到採購單頁"""
+        pages = ["無關內容", "承製廠商簽回"]
+
+        page = find_purchase_order_page(pages)
+
+        assert page == "承製廠商簽回"
 
 
 class TestExtractFromFilename:
@@ -149,3 +167,82 @@ class TestExtractFromFilename:
         """測試無效檔名"""
         result = extract_purchase_order_no_from_filename("invalid.pdf")
         assert result is None
+
+
+class TestExtractPurchaseOrderFromGoodsReceiptPages:
+    """進貨單頁採購單號抽取測試"""
+
+    def test_extract_from_goods_receipt_pages(self, fixtures_dir: Path):
+        """測試從進貨單頁抽取採購單號"""
+        pdf_path = fixtures_dir / "進貨單_1南京.pdf"
+        if not pdf_path.exists():
+            pytest.skip("進貨單樣本不存在")
+
+        pages = extract_text_by_page(pdf_path)
+        results = extract_purchase_order_nos_from_goods_receipt_pages(pages)
+
+        assert results == {"1011412050003"}
+
+    def test_extract_when_goods_receipt_no_matches(self):
+        """測試採購單號與單據號碼相同時仍可抽取"""
+        purchase_order_no = "1011412100001"
+        text = f"單據號碼:\n{purchase_order_no}\n採購單號:\n{purchase_order_no}\n"
+
+        result = extract_purchase_order_no_from_goods_receipt_text(text)
+
+        assert result == purchase_order_no
+
+
+class TestParseDocuments:
+    """逐頁解析測試"""
+
+    def test_parse_documents_multi_order(self, monkeypatch: pytest.MonkeyPatch):
+        """測試同一 PDF 內多採購單逐頁解析"""
+        po_no_1 = "1011412100001"
+        po_no_2 = "1011412100002"
+        pages = [
+            f"採購單號:\n{po_no_1}\n驗收單號:\n{po_no_1}\n",
+            f"採購單號:\n{po_no_2}\n驗收單號:\n{po_no_2}\n",
+        ]
+
+        def fake_extract_text_by_page(_: Path) -> list[str]:
+            return pages
+
+        monkeypatch.setattr(
+            "doc_processor.pdf_parser.extract_text_by_page",
+            fake_extract_text_by_page,
+        )
+
+        docs = parse_documents(Path("進貨驗收單-多頁.pdf"))
+
+        assert [doc.purchase_order_no for doc in docs] == [po_no_1, po_no_2]
+        assert [doc.page_index for doc in docs] == [0, 1]
+
+    def test_group_contiguous_pages_for_same_order(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """測試同採購單連續頁合併"""
+        po_no_1 = "1011412100001"
+        po_no_2 = "1011412100002"
+        pages = [
+            f"採購單號:\n{po_no_1}\n頁 次:\n1 / 2\n",
+            f"採購單號:\n{po_no_1}\n頁 次:\n2 / 2\n",
+            f"採購單號:\n{po_no_2}\n頁 次:\n1 / 1\n",
+        ]
+
+        def fake_extract_text_by_page(_: Path) -> list[str]:
+            return pages
+
+        monkeypatch.setattr(
+            "doc_processor.pdf_parser.extract_text_by_page",
+            fake_extract_text_by_page,
+        )
+
+        docs = parse_documents(Path("採購單-多頁.pdf"))
+
+        assert len(docs) == 2
+        assert docs[0].purchase_order_no == po_no_1
+        assert docs[0].page_indices == [0, 1]
+        assert docs[1].purchase_order_no == po_no_2
+        assert docs[1].page_indices == [2]

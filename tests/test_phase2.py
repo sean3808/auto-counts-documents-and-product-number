@@ -50,3 +50,25 @@ class TestRunPhase2:
 
         # 沒有檔案應該回傳成功
         assert exit_code == 0
+
+    def test_purchase_order_mismatch(self, fixtures_dir: Path, temp_output_dir: Path):
+        """測試檔名與進貨單內文採購單號不一致時跳過"""
+        template_path = fixtures_dir / "template.xlsx"
+
+        logger = ProcessLogger(temp_output_dir)
+        run_phase1(fixtures_dir, temp_output_dir, logger)
+
+        pdf_files = list(temp_output_dir.glob("*.pdf"))
+        assert len(pdf_files) == 1
+
+        original_pdf = pdf_files[0]
+        _, rest_name = original_pdf.name.split("-", 1)
+        wrong_pdf = original_pdf.with_name(f"1011111111111-{rest_name}")
+        original_pdf.rename(wrong_pdf)
+
+        logger2 = ProcessLogger(temp_output_dir)
+        exit_code = run_phase2(temp_output_dir, template_path, logger2)
+
+        assert exit_code == 2
+        excel_files = list(temp_output_dir.glob("*-單據明細.xlsx"))
+        assert len(excel_files) == 0

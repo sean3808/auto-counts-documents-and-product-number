@@ -59,7 +59,7 @@ uv sync --extra dev
 - Framework: pytest
 - Test files: `test_*.py` in `tests/`
 - Fixtures: `tests/fixtures/` (redacted PDF samples)
-- Current status: 21 tests, all passing
+- Current status: 30 tests, all passing
 
 ```powershell
 # Run all tests
@@ -68,6 +68,12 @@ uv run pytest tests/ -v
 # Run specific test file
 uv run pytest tests/test_pdf_parser.py -v
 ```
+
+## Processing Notes
+
+- Multi-order PDFs are parsed per page; consecutive pages with the same purchase order and page sequence (1/2, 2/2) are merged.
+- Phase 2 purchase order page detection keywords: 採購日期:, 廠商:, 承製廠商簽回
+- Missing required documents (goods receipt or receipt inspection) skip the group.
 
 ## Commit & Pull Request Guidelines
 
