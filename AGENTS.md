@@ -1,41 +1,98 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `input/`: drop the same-day PDF documents here; keep the folder flat (no subfolders).
-- `output/`: merged PDFs and generated Excel summaries are written here.
-- `PRD.md`: requirements, phases, regex rules, and processing order.
-- `template.xlsx` and `samples.xlsx`: Excel template and example data for validation.
-- Root samples: keep any sample PDFs/images minimal and sanitized.
+
+```
+auto-counts-documents-and-product-number/
+├── run.ps1                 # PowerShell 入口腳本
+├── pyproject.toml          # uv 專案設定
+├── template.xlsx           # Excel 模板（B3=支數, C3=張數）
+├── src/doc_processor/      # Python 核心模組
+│   ├── cli.py              # CLI 入口
+│   ├── phase1.py           # Phase 1 邏輯
+│   ├── phase2.py           # Phase 2 邏輯
+│   ├── pdf_parser.py       # PDF 解析
+│   ├── excel_writer.py     # Excel 寫入
+│   └── logger.py           # Log 處理
+├── tests/                  # pytest 測試
+│   ├── fixtures/           # 測試用 PDF 樣本
+│   └── test_*.py           # 測試檔案
+├── input/                  # 放入當天 PDF（gitignore）
+├── output/                 # 輸出結果（gitignore）
+├── PRD.md                  # 產品需求文件
+└── CLAUDE.md               # Claude Code 指南
+```
 
 ## Build, Test, and Development Commands
-There are no runnable scripts checked in yet. When automation is added, document the exact commands here. The PRD calls for a PowerShell wrapper plus a Python core; examples to aim for:
 
 ```powershell
-# Planned entrypoints (add once scripts exist)
+# 執行 Phase 1（合併 PDF）
 .\run.ps1 phase1
+
+# 執行 Phase 2（產生 Excel）
 .\run.ps1 phase2
+
+# 一鍵執行全部
 .\run.ps1 all
+
+# 直接用 Python 執行
+uv run python -m doc_processor phase1
+uv run python -m doc_processor phase2
+uv run python -m doc_processor all
+
+# 執行測試
+uv run pytest tests/ -v
+
+# 安裝依賴（含開發工具）
+uv sync --extra dev
 ```
 
 ## Coding Style & Naming Conventions
-- Save scripts in UTF-8 BOM as required by the PRD.
-- Python: 4-space indentation, `snake_case` for modules/functions, `PascalCase` for classes.
-- PowerShell: `Verb-Noun` function names and descriptive script filenames.
-- Output filenames must follow the patterns defined in `PRD.md` to keep Phase 2 deterministic.
+
+- **Python**: 4-space indentation, `snake_case` for modules/functions, `PascalCase` for classes
+- **PowerShell**: `Verb-Noun` function names
+- **Encoding**: UTF-8 (with BOM for PowerShell scripts)
+- Output filenames must follow PRD patterns to keep Phase 2 deterministic
 
 ## Testing Guidelines
-No tests or framework are present yet. If you add tests, prefer `pytest`, name files `test_*.py`, and keep PDF fixtures in a dedicated `tests/fixtures/` folder with redacted data. Document the test command in this section once it exists.
+
+- Framework: pytest
+- Test files: `test_*.py` in `tests/`
+- Fixtures: `tests/fixtures/` (redacted PDF samples)
+- Current status: 21 tests, all passing
+
+```powershell
+# Run all tests
+uv run pytest tests/ -v
+
+# Run specific test file
+uv run pytest tests/test_pdf_parser.py -v
+```
 
 ## Commit & Pull Request Guidelines
-This folder is not a Git repository, so no commit convention is established. If you initialize Git, use Conventional Commits (e.g., `feat: add phase1 parser`) and include:
-- a short summary of behavior changes
-- linked PRD section or issue ID
-- sample inputs or screenshots when PDF/Excel output changes
+
+- Use Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`
+- Include summary of behavior changes
+- Reference PRD section when applicable
+- Include sample inputs/outputs for PDF/Excel changes
+
+Example:
+```
+feat(phase1): 新增多採購單分組支援
+
+- 依採購單號分組合併 PDF
+- 請購單透過採購單間接關聯
+```
 
 ## Security & Configuration Tips
-- Do not commit real vendor documents or sensitive purchase data.
-- Keep `input/` and `output/` local-only; add fixtures only if redacted and minimal.
+
+- Do not commit real vendor documents or sensitive purchase data
+- `input/` and `output/` are gitignored
+- Test fixtures should use redacted/sanitized data
 
 ## Agent-Specific Instructions
-- Follow the PRD constraints strictly: no OCR, no subfolder recursion, and no fallback heuristics.
-- Never modify files under `input/`; always write results to `output/`.
+
+- Follow PRD constraints strictly: **no OCR, no subfolder recursion, no fallback heuristics**
+- Never modify files under `input/`; always write results to `output/`
+- When extraction fails, log the error and skip—do not guess or use backup rules
+- Log files are written to `output/YYYYMMDD_HHMMSS.log`
