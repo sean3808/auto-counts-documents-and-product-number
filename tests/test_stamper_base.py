@@ -115,3 +115,65 @@ class TestFindVendorStamp:
         result = find_vendor_stamp("CH058", stamps_dir)
         assert result is not None
         assert result.name == "CH058-長興隆裕.png"
+
+
+class TestStampPdf:
+    """stamp_pdf 函式測試"""
+
+    @pytest.fixture
+    def sample_pdf(self, tmp_path: Path) -> Path:
+        """建立測試用 PDF"""
+        import fitz
+
+        pdf_path = tmp_path / "test.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((100, 100), "Test Document")
+        doc.save(pdf_path)
+        doc.close()
+        return pdf_path
+
+    @pytest.fixture
+    def sample_stamp(self, tmp_path: Path) -> Path:
+        """建立測試用印章"""
+        stamp_path = tmp_path / "stamp.png"
+        img = Image.new("RGBA", (100, 50), (255, 0, 0, 128))
+        img.save(stamp_path)
+        return stamp_path
+
+    def test_stamp_pdf_single_stamp(self, sample_pdf: Path, sample_stamp: Path, tmp_path: Path):
+        """測試在 PDF 上蓋單一印章"""
+        from doc_processor.stamper.base import stamp_pdf
+        import fitz
+
+        output_path = tmp_path / "output.pdf"
+        stamps = [
+            (sample_stamp, StampConfig(x=100, y=700, target_width=50, target_height=25))
+        ]
+
+        stamp_pdf(sample_pdf, output_path, stamps)
+
+        assert output_path.exists()
+        # 驗證輸出 PDF 有圖片
+        doc = fitz.open(output_path)
+        images = doc[0].get_images()
+        doc.close()
+        assert len(images) == 1
+
+    def test_stamp_pdf_multiple_stamps(self, sample_pdf: Path, sample_stamp: Path, tmp_path: Path):
+        """測試在 PDF 上蓋多個印章"""
+        from doc_processor.stamper.base import stamp_pdf
+        import fitz
+
+        output_path = tmp_path / "output.pdf"
+        stamps = [
+            (sample_stamp, StampConfig(x=100, y=700, target_width=50, target_height=25)),
+            (sample_stamp, StampConfig(x=300, y=700, target_width=50, target_height=25)),
+        ]
+
+        stamp_pdf(sample_pdf, output_path, stamps)
+
+        doc = fitz.open(output_path)
+        images = doc[0].get_images()
+        doc.close()
+        assert len(images) == 2

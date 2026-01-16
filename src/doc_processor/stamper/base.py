@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image  # noqa: F401 - used in later functions
+import fitz
+from PIL import Image
 
 
 @dataclass
@@ -88,3 +89,46 @@ def find_vendor_stamp(vendor_code: str, stamps_dir: Path) -> Path | None:
             return stamp_file
 
     return None
+
+
+def stamp_pdf(
+    input_path: Path,
+    output_path: Path,
+    stamps: list[tuple[Path, StampConfig]],
+    page_index: int = 0,
+) -> None:
+    """
+    在 PDF 指定頁面上蓋印章。
+
+    Args:
+        input_path: 輸入 PDF 路徑
+        output_path: 輸出 PDF 路徑
+        stamps: 印章列表，每個元素為 (印章圖片路徑, StampConfig)
+        page_index: 要蓋章的頁面索引（預設第一頁）
+    """
+    doc = fitz.open(input_path)
+    page = doc[page_index]
+
+    for stamp_path, config in stamps:
+        # 讀取印章圖片尺寸
+        with Image.open(stamp_path) as img:
+            orig_width, orig_height = img.size
+
+        # 計算縮放後尺寸
+        new_width, new_height = scale_image_to_fit(
+            orig_width, orig_height, config.target_width, config.target_height
+        )
+
+        # 建立插入區域
+        rect = fitz.Rect(
+            config.x,
+            config.y,
+            config.x + new_width,
+            config.y + new_height,
+        )
+
+        # 插入圖片
+        page.insert_image(rect, filename=str(stamp_path))
+
+    doc.save(output_path)
+    doc.close()
