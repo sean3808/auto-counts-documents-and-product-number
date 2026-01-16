@@ -1,9 +1,11 @@
 """蓋章基礎功能模組"""
 
+import io
 from dataclasses import dataclass
 from pathlib import Path
 
 import fitz
+import numpy as np
 from PIL import Image
 
 
@@ -45,6 +47,34 @@ def scale_image_to_fit(
     scale = min(width_ratio, height_ratio)
 
     return orig_width * scale, orig_height * scale
+
+
+def remove_white_background(img: Image.Image, threshold: int = 240) -> Image.Image:
+    """
+    將圖片的白色（或接近白色）背景轉換為透明。
+
+    Args:
+        img: PIL Image 物件
+        threshold: 白色閾值（0-255），像素 RGB 值都大於此值時視為白色
+
+    Returns:
+        帶有透明背景的 RGBA 圖片
+    """
+    # 轉換為 RGBA
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+
+    # 轉換為 numpy array 進行處理
+    data = np.array(img)
+
+    # 找出接近白色的像素（R, G, B 都大於 threshold）
+    r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+    white_mask = (r > threshold) & (g > threshold) & (b > threshold)
+
+    # 將白色像素的 alpha 設為 0（透明）
+    data[:, :, 3] = np.where(white_mask, 0, a)
+
+    return Image.fromarray(data)
 
 
 def find_vendor_stamp(vendor_code: str, stamps_dir: Path) -> Path | None:
@@ -96,6 +126,7 @@ def stamp_pdf(
     output_path: Path,
     stamps: list[tuple[Path, StampConfig]],
     page_index: int = 0,
+    remove_background: bool = False,
 ) -> None:
     """
     在 PDF 指定頁面上蓋印章。
@@ -105,14 +136,25 @@ def stamp_pdf(
         output_path: 輸出 PDF 路徑
         stamps: 印章列表，每個元素為 (印章圖片路徑, StampConfig)
         page_index: 要蓋章的頁面索引（預設第一頁）
+        remove_background: 是否自動去除白色背景
     """
     doc = fitz.open(input_path)
     page = doc[page_index]
 
     for stamp_path, config in stamps:
-        # 讀取印章圖片尺寸
+        # 讀取印章圖片
         with Image.open(stamp_path) as img:
             orig_width, orig_height = img.size
+
+            if remove_background:
+                # 去除白色背景
+                img = remove_white_background(img)
+                # 將處理後的圖片轉為 bytes
+                img_buffer = io.BytesIO()
+                img.save(img_buffer, format="PNG")
+                img_data = img_buffer.getvalue()
+            else:
+                img_data = None
 
         # 計算縮放後尺寸
         new_width, new_height = scale_image_to_fit(
@@ -128,7 +170,10 @@ def stamp_pdf(
         )
 
         # 插入圖片
-        page.insert_image(rect, filename=str(stamp_path))
+        if img_data:
+            page.insert_image(rect, stream=img_data)
+        else:
+            page.insert_image(rect, filename=str(stamp_path))
 
     doc.save(output_path)
     doc.close()

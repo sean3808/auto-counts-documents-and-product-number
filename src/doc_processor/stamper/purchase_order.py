@@ -29,6 +29,7 @@ def stamp_purchase_order(
     stamps_dir: Path,
     vendor_code: str | None = None,
     handler_stamp_name: str = DEFAULT_HANDLER_STAMP,
+    remove_background: bool = True,
 ) -> None:
     """
     在採購單 PDF 上蓋章。
@@ -39,6 +40,7 @@ def stamp_purchase_order(
         stamps_dir: 印章資料夾路徑
         vendor_code: 供商代號（用於查找供應商章），None 則不蓋供應商章
         handler_stamp_name: 承辦人印章檔名
+        remove_background: 是否自動去除印章白色背景（預設 True）
     """
     stamps: list[tuple[Path, StampConfig]] = []
 
@@ -54,7 +56,7 @@ def stamp_purchase_order(
             stamps.append((vendor_stamp_path, STAMP_CONFIG_VENDOR))
 
     if stamps:
-        stamp_pdf(input_path, output_path, stamps)
+        stamp_pdf(input_path, output_path, stamps, remove_background=remove_background)
     else:
         # 無印章時直接複製
         import shutil

@@ -30,6 +30,7 @@ def stamp_receiving(
     stamps_dir: Path,
     warehouse_stamp_name: str = DEFAULT_WAREHOUSE_STAMP,
     creator_stamp_name: str = DEFAULT_CREATOR_STAMP,
+    remove_background: bool = True,
 ) -> None:
     """
     在進貨驗收單 PDF 上蓋章。
@@ -40,6 +41,7 @@ def stamp_receiving(
         stamps_dir: 印章資料夾路徑
         warehouse_stamp_name: 倉管人員印章檔名
         creator_stamp_name: 製單人員印章檔名
+        remove_background: 是否自動去除印章白色背景（預設 True）
     """
     stamps: list[tuple[Path, StampConfig]] = []
 
@@ -54,7 +56,7 @@ def stamp_receiving(
         stamps.append((creator_stamp_path, STAMP_CONFIG_CREATOR))
 
     if stamps:
-        stamp_pdf(input_path, output_path, stamps)
+        stamp_pdf(input_path, output_path, stamps, remove_background=remove_background)
     else:
         # 無印章時直接複製
         import shutil
