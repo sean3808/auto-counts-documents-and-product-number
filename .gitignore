@@ -45,3 +45,12 @@ output/
 /*.jpg
 /業旺明細*.xlsx
 /samples.xlsx
+
+# 壓縮檔
+*.zip
+
+# 印章資料夾（含用戶私人印章）
+印章/
+
+# 暫存資料夾
+new/

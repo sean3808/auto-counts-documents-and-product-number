@@ -194,3 +194,65 @@ uv run pytest tests/test_pdf_parser.py -v
 - 框架：pytest
 - 測試樣本：`tests/fixtures/`
 - 目前 31 個測試案例，全數通過
+
+## 繁體中文編碼處理
+
+本專案會處理含繁體中文的資料夾與檔案名稱，在 Windows 環境下需特別注意編碼問題。
+
+### 常見問題
+
+| 情境 | 問題 | 原因 |
+|------|------|------|
+| PowerShell 輸出 | 中文顯示亂碼 | Console 預設編碼非 UTF-8 |
+| Python print() | `UnicodeEncodeError: 'cp950'` | stdout 使用 cp950 編碼 |
+| Bash -c 參數 | 中文路徑無法識別 | 編碼轉換問題 |
+
+### 解決方案
+
+**1. 列出中文檔名：使用 Glob 工具**
+
+```
+# ✅ Glob 工具可正確處理中文路徑
+Glob: pattern="印章/*.png"
+
+# ❌ 避免用 Bash 列出中文資料夾
+pwsh -Command "Get-ChildItem '印章'"  # 可能亂碼
+```
+
+**2. Python 腳本輸出中文**
+
+```python
+import sys
+sys.stdout.reconfigure(encoding='utf-8')  # 放在腳本開頭
+
+# 或寫入檔案再執行，避免 inline -c 參數
+```
+
+**3. PowerShell 輸出中文**
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# 放在指令最前面
+```
+
+**4. 處理中文路徑的 Python 程式碼**
+
+```python
+from pathlib import Path
+
+# ✅ 使用 pathlib，避免字串拼接
+stamp_dir = Path('印章')
+for f in stamp_dir.iterdir():
+    # 處理檔案...
+
+# ✅ 檔案操作使用 Path 物件
+with open(Path('印章') / 'file.png', 'rb') as f:
+    pass
+```
+
+### 最佳實踐
+
+1. **優先使用 Glob/Read 工具**讀取中文路徑，而非 Bash
+2. **Python 腳本寫成檔案**再執行，避免 `-c` 參數中的編碼問題
+3. **pathlib.Path** 處理路徑，避免字串操作
+4. **測試時**使用實際中文檔名確保相容性
