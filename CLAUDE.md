@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 
-PDF 採購單據批次重組與 Excel 明細產生器。將當天所有 PDF 單據依採購單號分組合併，並自動填入 Excel 明細。
+PDF 採購單據批次重組與 Excel 明細產生器。將當天所有 PDF 單據自動蓋章、依採購單號分組合併，並自動填入 Excel 明細。
 
 ## 專案地圖
 
@@ -16,6 +16,7 @@ flowchart TB
     end
 
     subgraph 核心模組
+        phase0[phase0.py]
         phase1[phase1.py]
         phase2[phase2.py]
         parser[pdf_parser.py]
@@ -23,22 +24,34 @@ flowchart TB
         logger[logger.py]
     end
 
+    subgraph 蓋章模組
+        stamper[stamper/]
+    end
+
     subgraph 資料流
         input[input/*.pdf]
+        stamps[印章/removebg/]
+        temp[temp/stamped/*.pdf]
         output_pdf[output/*.pdf]
         output_xlsx[output/*-單據明細.xlsx]
     end
 
     run --> cli
+    cli --> phase0
     cli --> phase1
     cli --> phase2
+    phase0 --> stamper
+    phase0 --> logger
     phase1 --> parser
     phase1 --> logger
     phase2 --> parser
     phase2 --> excel
     phase2 --> logger
 
-    input --> phase1
+    input --> phase0
+    stamps --> phase0
+    phase0 --> temp
+    temp --> phase1
     phase1 --> output_pdf
     output_pdf --> phase2
     phase2 --> output_xlsx
@@ -52,46 +65,62 @@ auto-counts-documents-and-product-number/
 ├── pyproject.toml          # uv 專案設定
 ├── template.xlsx           # Excel 模板
 ├── src/doc_processor/
-│   ├── cli.py              # CLI 入口（phase1/phase2/all）
+│   ├── cli.py              # CLI 入口（phase0/phase1/phase2/all）
+│   ├── phase0.py           # Phase 0：PDF 蓋章
 │   ├── phase1.py           # Phase 1：PDF 分組合併
 │   ├── phase2.py           # Phase 2：Excel 明細生成
 │   ├── pdf_parser.py       # PDF 解析與欄位抽取
 │   ├── excel_writer.py     # Excel 模板填入
-│   └── logger.py           # Log 處理
+│   ├── logger.py           # Log 處理
+│   └── stamper/            # 蓋章模組
+│       ├── base.py         # 蓋章基礎功能
+│       ├── purchase_order.py  # 採購單蓋章
+│       └── receiving.py    # 進貨驗收單蓋章
 ├── tests/
 │   ├── fixtures/           # 測試用 PDF 樣本
 │   └── test_*.py           # 測試檔案
 ├── input/                  # 放入當天 PDF（gitignore）
-└── output/                 # 輸出結果（gitignore）
+├── temp/stamped/           # Phase 0 暫存區（gitignore）
+├── output/                 # 輸出結果（gitignore）
+└── 印章/removebg/          # 已去背的印章圖片（gitignore）
 ```
 
 ## 模組職責
 
 | 模組 | 職責 |
 |------|------|
-| `cli.py` | 解析命令列參數，調度 phase1/phase2 |
-| `phase1.py` | 掃描 input、分組、排序、合併 PDF |
+| `cli.py` | 解析命令列參數，調度 phase0/phase1/phase2 |
+| `phase0.py` | 掃描 input、對採購單和進貨驗收單蓋章 |
+| `phase1.py` | 掃描 temp/stamped、分組、排序、合併 PDF |
 | `phase2.py` | 掃描 output PDF、計算張數/支數、產生 Excel |
 | `pdf_parser.py` | PDF 文字提取、單別判斷、欄位抽取、PDF 合併 |
 | `excel_writer.py` | 讀取模板、填入數值、另存新檔 |
 | `logger.py` | 統一 log 格式，輸出到檔案和控制台 |
+| `stamper/` | PDF 蓋章功能（座標定位、圖片縮放、供應商章查找） |
 
 ## 開發指令
 
 ```powershell
+# 執行 Phase 0（蓋章）
+.\run.ps1 phase0
+
 # 執行 Phase 1（合併 PDF）
 .\run.ps1 phase1
 
 # 執行 Phase 2（產生 Excel）
 .\run.ps1 phase2
 
-# 一鍵執行全部
+# 一鍵執行全部（phase0 → phase1 → phase2）
 .\run.ps1 all
 
 # 直接用 Python 執行
+uv run python -m doc_processor phase0
 uv run python -m doc_processor phase1
 uv run python -m doc_processor phase2
 uv run python -m doc_processor all
+
+# 指定印章資料夾
+uv run python -m doc_processor all --stamps "./印章/removebg"
 
 # 執行測試
 uv run pytest tests/ -v
@@ -102,9 +131,25 @@ uv sync --extra dev
 
 ## 核心處理流程
 
-### Phase 1：PDF 批次合併
+### Phase 0：PDF 蓋章
 
 1. 掃描 `input/` 所有 `*.pdf`（不含子資料夾）
+2. 由**檔名前綴**判斷單據類型
+3. 蓋章規則：
+
+| 單據類型 | 蓋章內容 |
+|---------|---------|
+| 採購單 | 承辦人章（雅萍）+ 供應商章（依供商代號） |
+| 進貨驗收單 | 倉管章（簡銘佑）+ 製單章（雅萍） |
+| 進貨單 | 不蓋章，直接複製 |
+| 請購單 | 不蓋章，直接複製 |
+
+4. 採購單逐頁解析供商代號（`[A-Z]{2}\d{3}`），蓋對應供應商章
+5. 輸出：`temp/stamped/{原檔名}`
+
+### Phase 1：PDF 批次合併
+
+1. 掃描 `temp/stamped/` 所有 `*.pdf`（Phase 0 產出）
 2. 由**檔名開頭**判斷單別（進貨驗收單 > 進貨單 > 採購單 > 請購單）
 3. 由**內文**抽取採購單號進行分組（請購單透過採購單間接關聯）
 4. 多採購單 PDF 逐頁解析；同採購單且連續頁（頁次 1/2、2/2）合併為同一張單
@@ -179,7 +224,8 @@ uv sync --extra dev
 - **不使用 OCR**：純 PDF 文字層解析
 - **不遞迴子資料夾**
 - **不修改 input/**：原始檔案永遠保留
-- 合併版執行時，Phase 1 必須完成後才進入 Phase 2
+- **印章需預先去背**：使用 `印章/removebg/` 資料夾的透明 PNG
+- 合併版執行時，Phase 0 → Phase 1 → Phase 2 依序執行
 
 ## 測試
 
@@ -193,7 +239,7 @@ uv run pytest tests/test_pdf_parser.py -v
 
 - 框架：pytest
 - 測試樣本：`tests/fixtures/`
-- 目前 31 個測試案例，全數通過
+- 目前 56 個測試案例，全數通過
 
 ## 繁體中文編碼處理
 
