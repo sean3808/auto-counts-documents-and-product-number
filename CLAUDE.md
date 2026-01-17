@@ -62,6 +62,7 @@ flowchart TB
 ```
 auto-counts-documents-and-product-number/
 ├── run.ps1                 # PowerShell 入口
+├── run.bat                 # Windows 批次檔入口（雙擊執行）
 ├── pyproject.toml          # uv 專案設定
 ├── template.xlsx           # Excel 模板
 ├── src/doc_processor/
@@ -71,11 +72,13 @@ auto-counts-documents-and-product-number/
 │   ├── phase2.py           # Phase 2：Excel 明細生成
 │   ├── pdf_parser.py       # PDF 解析與欄位抽取
 │   ├── excel_writer.py     # Excel 模板填入
-│   ├── logger.py           # Log 處理
+│   ├── logger.py           # Log 處理（含結論摘要）
 │   └── stamper/            # 蓋章模組
 │       ├── base.py         # 蓋章基礎功能
-│       ├── purchase_order.py  # 採購單蓋章
-│       └── receiving.py    # 進貨驗收單蓋章
+│       ├── purchase_order.py     # 採購單蓋章
+│       ├── receiving.py          # 進貨驗收單蓋章
+│       ├── purchase_requisition.py  # 請購單蓋章
+│       └── goods_receipt.py      # 進貨單蓋章
 ├── tests/
 │   ├── fixtures/           # 測試用 PDF 樣本
 │   └── test_*.py           # 測試檔案
@@ -90,12 +93,12 @@ auto-counts-documents-and-product-number/
 | 模組 | 職責 |
 |------|------|
 | `cli.py` | 解析命令列參數，調度 phase0/phase1/phase2 |
-| `phase0.py` | 掃描 input、對採購單和進貨驗收單蓋章 |
+| `phase0.py` | 掃描 input、對各類單據蓋章（含影像自然化） |
 | `phase1.py` | 掃描 temp/stamped、分組、排序、合併 PDF |
 | `phase2.py` | 掃描 output PDF、計算張數/支數、產生 Excel |
 | `pdf_parser.py` | PDF 文字提取、單別判斷、欄位抽取、PDF 合併 |
 | `excel_writer.py` | 讀取模板、填入數值、另存新檔 |
-| `logger.py` | 統一 log 格式，輸出到檔案和控制台 |
+| `logger.py` | 統一 log 格式，輸出到檔案和控制台，產生結論摘要 |
 | `stamper/` | PDF 蓋章功能（座標定位、圖片縮放、供應商章查找） |
 
 ## 開發指令
@@ -141,11 +144,12 @@ uv sync --extra dev
 |---------|---------|
 | 採購單 | 承辦人章（雅萍）+ 供應商章（依供商代號） |
 | 進貨驗收單 | 倉管章（簡銘佑）+ 製單章（雅萍） |
-| 進貨單 | 不蓋章，直接複製 |
-| 請購單 | 不蓋章，直接複製 |
+| 進貨單 | 製單章（雅萍） |
+| 請購單 | 製單章（雅萍） |
 
 4. 採購單逐頁解析供商代號（`[A-Z]{2}\d{3}`），蓋對應供應商章
-5. 輸出：`temp/stamped/{原檔名}`
+5. **影像自然化**：每頁印章隨機旋轉（-3° ~ +6°）與位移（右移 0~8pt、下移 0~6pt）
+6. 輸出：`temp/stamped/{原檔名}`
 
 ### Phase 1：PDF 批次合併
 
@@ -210,6 +214,7 @@ uv sync --extra dev
 - **不設計備援規則**：抓不到資訊即記錄失敗，不做推測
 - 失敗項目跳過，繼續處理其他項目
 - Log 檔案：`output/YYYYMMDD_HHMMSS.log`
+- **結論摘要**：Log 結尾包含各階段統計、需補齊的文件清單、下一步行動建議
 
 ### 退出碼
 
@@ -239,7 +244,7 @@ uv run pytest tests/test_pdf_parser.py -v
 
 - 框架：pytest
 - 測試樣本：`tests/fixtures/`
-- 目前 56 個測試案例，全數通過
+- 目前 57 個測試案例，全數通過
 
 ## 繁體中文編碼處理
 

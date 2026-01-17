@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     採購單關聯單據重組與單據明細產生器 - PowerShell 入口腳本
 
@@ -8,9 +8,14 @@
     2. 檢查 uv 可用
     3. 呼叫 Python CLI
     4. 傳遞退出碼
+    5. 執行結束後開啟 log 檔案
 
 .PARAMETER Command
-    執行的階段：phase1, phase2, all
+    執行的階段：phase0, phase1, phase2, all
+
+.EXAMPLE
+    .\run.ps1 phase0
+    執行 Phase 0：PDF 蓋章
 
 .EXAMPLE
     .\run.ps1 phase1
@@ -22,13 +27,13 @@
 
 .EXAMPLE
     .\run.ps1 all
-    依序執行 Phase 1 + Phase 2
+    依序執行 Phase 0 + Phase 1 + Phase 2
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("phase1", "phase2", "all")]
+    [ValidateSet("phase0", "phase1", "phase2", "all")]
     [string]$Command = "all"
 )
 
@@ -42,6 +47,8 @@ Set-Location $ScriptDir
 $InputDir = Join-Path $ScriptDir "input"
 $OutputDir = Join-Path $ScriptDir "output"
 $TemplateFile = Join-Path $ScriptDir "template.xlsx"
+$StampsDir = Join-Path $ScriptDir "印章\removebg"
+$TempDir = Join-Path $ScriptDir "temp\stamped"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "採購單關聯單據重組與單據明細產生器" -ForegroundColor Cyan
@@ -66,7 +73,7 @@ if (-not (Test-Path $InputDir)) {
     Write-Host "[建立] input/ 資料夾" -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $InputDir -Force | Out-Null
     Write-Host "[提示] 請將 PDF 檔案放入 input/ 資料夾後再執行" -ForegroundColor Yellow
-    if ($Command -eq "phase1" -or $Command -eq "all") {
+    if ($Command -eq "phase0" -or $Command -eq "phase1" -or $Command -eq "all") {
         exit 1
     }
 }
@@ -77,11 +84,27 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
 
+# temp/stamped 資料夾（Phase 0 需要）
+if ($Command -eq "phase0" -or $Command -eq "all") {
+    if (-not (Test-Path $TempDir)) {
+        Write-Host "[建立] temp/stamped/ 資料夾" -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+    }
+}
+
 # template.xlsx（Phase 2 需要）
 if ($Command -eq "phase2" -or $Command -eq "all") {
     if (-not (Test-Path $TemplateFile)) {
         Write-Host "[錯誤] 找不到 template.xlsx" -ForegroundColor Red
         exit 2
+    }
+}
+
+# 印章資料夾（Phase 0 需要）
+if ($Command -eq "phase0" -or $Command -eq "all") {
+    if (-not (Test-Path $StampsDir)) {
+        Write-Host "[警告] 找不到印章資料夾: $StampsDir" -ForegroundColor Yellow
+        Write-Host "[提示] Phase 0 可能無法正常蓋章" -ForegroundColor Yellow
     }
 }
 
@@ -93,9 +116,22 @@ Write-Host "[執行] $Command" -ForegroundColor Cyan
 Write-Host "----------------------------------------" -ForegroundColor Gray
 
 $exitCode = 0
+$logFilePath = $null
+
 try {
-    & uv run python -m doc_processor $Command --input $InputDir --output $OutputDir --template $TemplateFile
+    # 執行 Python 並捕獲輸出
+    $output = & uv run python -m doc_processor $Command --input $InputDir --output $OutputDir --template $TemplateFile --stamps $StampsDir 2>&1
     $exitCode = $LASTEXITCODE
+
+    # 顯示輸出並尋找 log 檔案路徑
+    foreach ($line in $output) {
+        $lineStr = $line.ToString()
+        if ($lineStr -match "^LOG_FILE_PATH:(.+)$") {
+            $logFilePath = $Matches[1]
+        } else {
+            Write-Host $lineStr
+        }
+    }
 }
 catch {
     Write-Host "[錯誤] 執行失敗: $_" -ForegroundColor Red
@@ -119,6 +155,15 @@ switch ($exitCode) {
     default {
         Write-Host "[未知] 退出碼: $exitCode" -ForegroundColor Red
     }
+}
+
+# 5. 開啟 log 檔案
+if ($logFilePath -and (Test-Path $logFilePath)) {
+    Write-Host ""
+    Write-Host "[開啟] Log 檔案: $logFilePath" -ForegroundColor Cyan
+    Start-Process $logFilePath
+} elseif ($logFilePath) {
+    Write-Host "[警告] Log 檔案不存在: $logFilePath" -ForegroundColor Yellow
 }
 
 exit $exitCode

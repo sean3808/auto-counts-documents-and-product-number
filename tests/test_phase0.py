@@ -140,8 +140,8 @@ class TestRunPhase0:
         doc.close()
         assert len(images) == 0
 
-    def test_phase0_goods_receipt_copied(self, setup_dirs):
-        """測試進貨單應直接複製不蓋章"""
+    def test_phase0_goods_receipt_stamped(self, setup_dirs):
+        """測試進貨單應蓋章"""
         pdf_path = setup_dirs["input_dir"] / "進貨單~test.pdf"
         doc = fitz.open()
         page = doc.new_page()
@@ -160,11 +160,37 @@ class TestRunPhase0:
         output_file = setup_dirs["output_dir"] / "進貨單~test.pdf"
         assert output_file.exists()
 
-        # 驗證沒有蓋章
+        # 驗證有蓋章（製表章）
         doc = fitz.open(output_file)
         images = doc[0].get_images()
         doc.close()
-        assert len(images) == 0
+        assert len(images) == 1  # 應有 1 個印章（雅萍章）
+
+    def test_phase0_purchase_requisition_stamped(self, setup_dirs):
+        """測試請購單應蓋章"""
+        pdf_path = setup_dirs["input_dir"] / "請購單~test.pdf"
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((100, 100), "請購單")
+        doc.save(pdf_path)
+        doc.close()
+
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "請購單~test.pdf"
+        assert output_file.exists()
+
+        # 驗證有蓋章（製表章）
+        doc = fitz.open(output_file)
+        images = doc[0].get_images()
+        doc.close()
+        assert len(images) == 1  # 應有 1 個印章（雅萍章）
 
     def test_phase0_partial_failure(self, setup_dirs, sample_purchase_order):
         """測試部分失敗時應回傳 1"""

@@ -87,14 +87,22 @@ class DocumentGroup:
         }
 
 
-def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
+def run_phase1(
+    input_dir: Path,
+    output_dir: Path,
+    logger: ProcessLogger,
+    is_continuation: bool = False,
+) -> int:
     """
     執行 Phase 1：掃描 input/，依採購單號合併 PDF 至 output/
 
     Returns:
         退出碼：0=成功, 1=部分失敗, 2=完全失敗
     """
-    logger.start("phase1")
+    if is_continuation:
+        logger.continue_phase("phase1")
+    else:
+        logger.start("phase1")
 
     # 1. 掃描 input/ 所有 *.pdf（不遞迴）
     pdf_files = list(input_dir.glob("*.pdf"))
@@ -132,7 +140,11 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
 
     if unknown_docs:
         for path in unknown_docs:
-            logger.skip(f"無法識別: {path.name}", "檔名不符合任何單別格式")
+            logger.skip(
+                f"無法識別: {path.name}",
+                "檔名不符合任何單別格式",
+                suggestion="確認檔名以「採購單~」「進貨單~」「進貨驗收單~」「請購單~」開頭",
+            )
 
     # 3. 建立請購單號 → 採購單號對照表（從採購單抽取）
     request_to_order: dict[str, str] = {}
@@ -153,14 +165,19 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
             else:
                 logger.skip(
                     f"請購單: {doc.path.name}",
-                    f"找不到對應的採購單（請購單號: {doc.purchase_request_no}）"
+                    f"找不到對應的採購單（請購單號: {doc.purchase_request_no}）",
+                    suggestion=f"補齊對應的「採購單~*.pdf」檔案（需包含請購單號 {doc.purchase_request_no}）",
                 )
                 continue
         else:
             # 其他單據：直接關聯
             po_no = doc.purchase_order_no
             if not po_no:
-                logger.skip(f"{doc.doc_type.value}: {doc.path.name}", "找不到採購單號")
+                logger.skip(
+                    f"{doc.doc_type.value}: {doc.path.name}",
+                    "找不到採購單號",
+                    suggestion="確認 PDF 內容包含有效的採購單號（格式: 1 開頭的 13 位數字）",
+                )
                 continue
 
         # 加入分組
@@ -179,22 +196,38 @@ def run_phase1(input_dir: Path, output_dir: Path, logger: ProcessLogger) -> int:
 
         # 檢查是否有進貨驗收單（必要的供商資訊來源）
         if not group.receipt_inspections:
-            logger.error(f"採購單組: {po_no}", "沒有進貨驗收單，無法取得供商資訊")
+            logger.error(
+                f"採購單組: {po_no}",
+                "沒有進貨驗收單，無法取得供商資訊",
+                suggestion=f"補齊採購單號 {po_no} 對應的「進貨驗收單~*.pdf」檔案",
+            )
             continue
 
         # 取得供商資訊
         vendor_code, vendor_name = group.get_vendor_info()
         if not vendor_code:
-            logger.error(f"採購單組: {po_no}", "找不到供商代號（進貨驗收單中無匹配 [A-Za-z]+\\d+）")
+            logger.error(
+                f"採購單組: {po_no}",
+                "找不到供商代號（進貨驗收單中無匹配 [A-Za-z]+\\d+）",
+                suggestion="確認進貨驗收單 PDF 內容包含供商代號（格式: 英文字母+數字，如 TW001）",
+            )
             continue
         if not vendor_name:
-            logger.error(f"採購單組: {po_no}", "找不到供商簡稱")
+            logger.error(
+                f"採購單組: {po_no}",
+                "找不到供商簡稱",
+                suggestion="確認進貨驗收單 PDF 內容包含供商簡稱",
+            )
             continue
 
         # 取得排序後的 PDF
         documents = group.get_sorted_documents()
         if not documents:
-            logger.error(f"採購單組: {po_no}", "沒有可合併的 PDF")
+            logger.error(
+                f"採購單組: {po_no}",
+                "沒有可合併的 PDF",
+                suggestion=f"確認採購單號 {po_no} 有相關的單據檔案",
+            )
             continue
 
         # 輸出檔名

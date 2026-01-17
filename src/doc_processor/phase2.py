@@ -114,7 +114,11 @@ def run_phase2(
         logger.start("phase2")
 
     if not template_path.exists():
-        logger.error("Phase 2", f"找不到模板檔案: {template_path}")
+        logger.error(
+            "Phase 2",
+            f"找不到模板檔案: {template_path}",
+            suggestion=f"請確認模板檔案存在於指定路徑: {template_path}",
+        )
         return logger.finish("Phase 2")
 
     # Phase 1 輸出格式：{採購單號}-{供商代號}-{供商簡稱}.pdf

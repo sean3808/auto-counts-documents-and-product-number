@@ -1,25 +1,50 @@
 """Phase 0：PDF 蓋章階段"""
 
+import io
+import random
 import re
 import shutil
 from pathlib import Path
 
 import fitz
+from PIL import Image
 
 from .logger import ProcessLogger
 from .stamper.base import StampConfig, find_vendor_stamp, scale_image_to_fit
+from .stamper.goods_receipt import (
+    DEFAULT_CREATOR_STAMP as GR_CREATOR_STAMP,
+    STAMP_CONFIG_CREATOR as GR_STAMP_CONFIG,
+)
+from .stamper.purchase_order import (
+    DEFAULT_HANDLER_STAMP as PO_HANDLER_STAMP,
+    STAMP_CONFIG_HANDLER as PO_HANDLER_CONFIG,
+    STAMP_CONFIG_VENDOR as PO_VENDOR_CONFIG,
+)
+from .stamper.purchase_requisition import (
+    DEFAULT_CREATOR_STAMP as PR_CREATOR_STAMP,
+    STAMP_CONFIG_CREATOR as PR_STAMP_CONFIG,
+)
+from .stamper.receiving import (
+    DEFAULT_CREATOR_STAMP as RCV_CREATOR_STAMP,
+    DEFAULT_WAREHOUSE_STAMP as RCV_WAREHOUSE_STAMP,
+    STAMP_CONFIG_CREATOR as RCV_CREATOR_CONFIG,
+    STAMP_CONFIG_WAREHOUSE as RCV_WAREHOUSE_CONFIG,
+)
 
 # 供商代號正則
 REGEX_VENDOR_CODE = r"[A-Z]{2}\d{3}"
 
+# === 自然化設定 ===
+# 旋轉角度範圍（整數，度）
+# PIL rotate: 正值=逆時針，負值=順時針
+ROTATION_MIN_DEGREES = -3  # 順時針 3°
+ROTATION_MAX_DEGREES = 6   # 逆時針 6°
 
-def _calculate_exit_code(success_count: int, fail_count: int) -> int:
-    """根據成功/失敗數量計算退出碼。"""
-    if fail_count == 0:
-        return 0
-    if success_count == 0:
-        return 2
-    return 1
+# 位移範圍（pt，1pt ≈ 0.35mm）
+OFFSET_X_MIN = 0
+OFFSET_X_MAX = 8  # 右移 0~8pt
+OFFSET_Y_MIN = 0
+OFFSET_Y_MAX = 6  # 下移 0~6pt
 
 
 def run_phase0(
@@ -27,6 +52,7 @@ def run_phase0(
     output_dir: Path,
     stamps_dir: Path,
     logger: ProcessLogger,
+    is_continuation: bool = False,
 ) -> int:
     """
     Phase 0：掃描 input，對採購單和進貨驗收單蓋章。
@@ -36,11 +62,15 @@ def run_phase0(
         output_dir: 輸出資料夾（已蓋章 PDF）
         stamps_dir: 印章資料夾
         logger: 日誌記錄器
+        is_continuation: 是否為接續模式（用於 all 命令）
 
     Returns:
         0=成功, 1=部分失敗, 2=完全失敗
     """
-    logger.info("=== Phase 0: PDF 蓋章 ===")
+    if is_continuation:
+        logger.continue_phase("phase0")
+    else:
+        logger.start("phase0")
 
     # 確保輸出資料夾存在且清空
     if output_dir.exists():
@@ -56,12 +86,9 @@ def run_phase0(
     pdf_files = list(input_dir.glob("*.pdf"))
     if not pdf_files:
         logger.info("input 資料夾無 PDF 檔案")
-        return 0
+        return logger.finish("Phase 0")
 
     logger.info(f"找到 {len(pdf_files)} 個 PDF 檔案")
-
-    success_count = 0
-    fail_count = 0
 
     for pdf_path in pdf_files:
         try:
@@ -71,24 +98,34 @@ def run_phase0(
             # 無印章資料夾時，所有檔案直接複製
             if not stamps_available:
                 shutil.copy(pdf_path, output_path)
-                logger.info(f"複製: {filename}")
+                logger.ok(f"複製: {filename}")
             elif filename.startswith("採購單~"):
                 _process_purchase_order(pdf_path, output_path, stamps_dir, logger)
+                logger.ok(f"採購單蓋章: {filename}")
             elif filename.startswith("進貨驗收單~"):
                 _process_receiving(pdf_path, output_path, stamps_dir, logger)
+                logger.ok(f"進貨驗收單蓋章: {filename}")
+            elif filename.startswith("請購單~"):
+                _process_single_stamp_document(
+                    pdf_path, output_path, stamps_dir, logger,
+                    PR_CREATOR_STAMP, PR_STAMP_CONFIG
+                )
+                logger.ok(f"請購單蓋章: {filename}")
+            elif filename.startswith("進貨單~"):
+                _process_single_stamp_document(
+                    pdf_path, output_path, stamps_dir, logger,
+                    GR_CREATOR_STAMP, GR_STAMP_CONFIG
+                )
+                logger.ok(f"進貨單蓋章: {filename}")
             else:
-                # 進貨單、請購單等：直接複製
+                # 其他檔案：直接複製
                 shutil.copy(pdf_path, output_path)
-                logger.info(f"複製: {filename}")
-
-            success_count += 1
+                logger.ok(f"複製: {filename}")
 
         except Exception as e:
             logger.error(f"PDF: {pdf_path.name}", str(e))
-            fail_count += 1
 
-    logger.info(f"Phase 0 完成: 成功 {success_count}, 失敗 {fail_count}")
-    return _calculate_exit_code(success_count, fail_count)
+    return logger.finish("Phase 0")
 
 
 def _process_purchase_order(
@@ -98,13 +135,7 @@ def _process_purchase_order(
     logger: ProcessLogger,
 ) -> None:
     """處理採購單：逐頁蓋章。"""
-    from .stamper.purchase_order import (
-        DEFAULT_HANDLER_STAMP,
-        STAMP_CONFIG_HANDLER,
-        STAMP_CONFIG_VENDOR,
-    )
-
-    handler_stamp_path = stamps_dir / DEFAULT_HANDLER_STAMP
+    handler_stamp_path = stamps_dir / PO_HANDLER_STAMP
     handler_exists = handler_stamp_path.exists()
 
     with fitz.open(input_path) as doc:
@@ -114,14 +145,14 @@ def _process_purchase_order(
             stamps: list[tuple[Path, StampConfig]] = []
 
             if handler_exists:
-                stamps.append((handler_stamp_path, STAMP_CONFIG_HANDLER))
+                stamps.append((handler_stamp_path, PO_HANDLER_CONFIG))
 
             vendor_match = re.search(REGEX_VENDOR_CODE, text)
             if vendor_match:
                 vendor_code = vendor_match.group()
                 vendor_stamp_path = find_vendor_stamp(vendor_code, stamps_dir)
                 if vendor_stamp_path:
-                    stamps.append((vendor_stamp_path, STAMP_CONFIG_VENDOR))
+                    stamps.append((vendor_stamp_path, PO_VENDOR_CONFIG))
                 else:
                     logger.info(
                         f"{input_path.name} 第 {page_idx + 1} 頁: "
@@ -136,7 +167,7 @@ def _process_purchase_order(
 
         doc.save(output_path)
 
-    logger.info(f"採購單蓋章: {input_path.name} ({page_count} 頁)")
+    logger.detail(f"已處理 {page_count} 頁")
 
 
 def _process_receiving(
@@ -146,17 +177,9 @@ def _process_receiving(
     logger: ProcessLogger,
 ) -> None:
     """處理進貨驗收單：每頁蓋章。"""
-    from .stamper.receiving import (
-        DEFAULT_CREATOR_STAMP,
-        DEFAULT_WAREHOUSE_STAMP,
-        STAMP_CONFIG_CREATOR,
-        STAMP_CONFIG_WAREHOUSE,
-    )
-
-    # 預先檢查印章是否存在，避免每頁重複警告
     stamp_candidates = [
-        (stamps_dir / DEFAULT_WAREHOUSE_STAMP, STAMP_CONFIG_WAREHOUSE),
-        (stamps_dir / DEFAULT_CREATOR_STAMP, STAMP_CONFIG_CREATOR),
+        (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
+        (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
     ]
     stamps: list[tuple[Path, StampConfig]] = []
     for stamp_path, config in stamp_candidates:
@@ -171,21 +194,66 @@ def _process_receiving(
             _apply_stamps_to_page(page, stamps)
         doc.save(output_path)
 
-    logger.info(f"進貨驗收單蓋章: {input_path.name} ({page_count} 頁)")
+    logger.detail(f"已處理 {page_count} 頁")
 
 
 def _apply_stamps_to_page(
     page: fitz.Page,
     stamps: list[tuple[Path, StampConfig]],
 ) -> None:
-    """將印章列表套用到指定頁面。"""
-    from PIL import Image
-
+    """將印章列表套用到指定頁面（含隨機旋轉與位移）。"""
     for stamp_path, config in stamps:
         with Image.open(stamp_path) as img:
-            orig_w, orig_h = img.size
-        new_w, new_h = scale_image_to_fit(
-            orig_w, orig_h, config.target_width, config.target_height
-        )
-        rect = fitz.Rect(config.x, config.y, config.x + new_w, config.y + new_h)
-        page.insert_image(rect, filename=str(stamp_path))
+            # 確保 RGBA 模式
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")
+
+            # 隨機旋轉
+            angle = random.randint(ROTATION_MIN_DEGREES, ROTATION_MAX_DEGREES)
+            if angle != 0:
+                img = img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
+
+            # 縮放（使用旋轉後的尺寸）
+            new_w, new_h = scale_image_to_fit(
+                img.width, img.height, config.target_width, config.target_height
+            )
+
+            # 隨機位移
+            offset_x = random.randint(OFFSET_X_MIN, OFFSET_X_MAX)
+            offset_y = random.randint(OFFSET_Y_MIN, OFFSET_Y_MAX)
+
+            # 計算最終位置
+            x = config.x + offset_x
+            y = config.y + offset_y
+
+            # 轉為 bytes 並插入
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            rect = fitz.Rect(x, y, x + new_w, y + new_h)
+            page.insert_image(rect, stream=buf.getvalue())
+
+
+def _process_single_stamp_document(
+    input_path: Path,
+    output_path: Path,
+    stamps_dir: Path,
+    logger: ProcessLogger,
+    stamp_filename: str,
+    stamp_config: StampConfig,
+) -> None:
+    """處理單一印章文件（請購單、進貨單等）：每頁蓋章。"""
+    stamp_path = stamps_dir / stamp_filename
+    stamps: list[tuple[Path, StampConfig]] = []
+
+    if stamp_path.exists():
+        stamps.append((stamp_path, stamp_config))
+    else:
+        logger.info(f"找不到印章: {stamp_filename}")
+
+    with fitz.open(input_path) as doc:
+        page_count = len(doc)
+        for page in doc:
+            _apply_stamps_to_page(page, stamps)
+        doc.save(output_path)
+
+    logger.detail(f"已處理 {page_count} 頁")
