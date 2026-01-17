@@ -5,8 +5,12 @@ import sys
 from pathlib import Path
 
 from .logger import ProcessLogger
+from .phase0 import run_phase0
 from .phase1 import run_phase1
 from .phase2 import run_phase2
+
+# 預設暫存資料夾
+DEFAULT_TEMP_DIR = Path("./temp/stamped")
 
 
 def main() -> int:
@@ -17,8 +21,8 @@ def main() -> int:
     )
     parser.add_argument(
         "command",
-        choices=["phase1", "phase2", "all"],
-        help="執行的階段：phase1=合併PDF, phase2=產生Excel, all=依序執行",
+        choices=["phase0", "phase1", "phase2", "all"],
+        help="執行的階段：phase0=蓋章, phase1=合併PDF, phase2=產生Excel, all=依序執行",
     )
     parser.add_argument(
         "--input",
@@ -38,6 +42,12 @@ def main() -> int:
         default=Path("./template.xlsx"),
         help="Excel 模板路徑（預設: ./template.xlsx）",
     )
+    parser.add_argument(
+        "--stamps",
+        type=Path,
+        default=Path("./印章/removebg"),
+        help="印章資料夾路徑（預設: ./印章/removebg）",
+    )
 
     args = parser.parse_args()
 
@@ -48,26 +58,34 @@ def main() -> int:
     logger = ProcessLogger(args.output)
 
     # 執行指定的階段
-    if args.command == "phase1":
+    if args.command == "phase0":
+        return run_phase0(args.input, DEFAULT_TEMP_DIR, args.stamps, logger)
+
+    elif args.command == "phase1":
+        # Phase 1 單獨執行時，從 input 讀取（向後兼容）
         return run_phase1(args.input, args.output, logger)
 
     elif args.command == "phase2":
         return run_phase2(args.output, args.template, logger)
 
     elif args.command == "all":
-        # 依序執行 Phase 1 + Phase 2
-        exit_code_1 = run_phase1(args.input, args.output, logger)
+        # 依序執行 Phase 0 + Phase 1 + Phase 2
+        exit_code_0 = run_phase0(args.input, DEFAULT_TEMP_DIR, args.stamps, logger)
 
-        # Phase 1 完全失敗時不執行 Phase 2
+        if exit_code_0 == 2:
+            return exit_code_0
+
+        # Phase 1 從 temp/stamped 讀取
+        exit_code_1 = run_phase1(DEFAULT_TEMP_DIR, args.output, logger)
+
         if exit_code_1 == 2:
-            return exit_code_1
+            return max(exit_code_0, exit_code_1)
 
         exit_code_2 = run_phase2(
             args.output, args.template, logger, is_continuation=True
         )
 
-        # 回傳較嚴重的退出碼
-        return max(exit_code_1, exit_code_2)
+        return max(exit_code_0, exit_code_1, exit_code_2)
 
     return 0
 
