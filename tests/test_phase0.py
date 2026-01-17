@@ -117,3 +117,66 @@ class TestRunPhase0:
         images = doc[0].get_images()
         doc.close()
         assert len(images) == 2  # 倉管章 + 製單章
+
+    def test_phase0_missing_stamps_folder(self, setup_dirs, sample_purchase_order):
+        """測試印章資料夾不存在時應複製 PDF"""
+        import shutil
+
+        shutil.rmtree(setup_dirs["stamps_dir"])  # 移除印章資料夾
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "採購單~test.pdf"
+        assert output_file.exists()
+
+        # 驗證沒有蓋章（只是複製）
+        doc = fitz.open(output_file)
+        images = doc[0].get_images()
+        doc.close()
+        assert len(images) == 0
+
+    def test_phase0_goods_receipt_copied(self, setup_dirs):
+        """測試進貨單應直接複製不蓋章"""
+        pdf_path = setup_dirs["input_dir"] / "進貨單~test.pdf"
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((100, 100), "進貨單")
+        doc.save(pdf_path)
+        doc.close()
+
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "進貨單~test.pdf"
+        assert output_file.exists()
+
+        # 驗證沒有蓋章
+        doc = fitz.open(output_file)
+        images = doc[0].get_images()
+        doc.close()
+        assert len(images) == 0
+
+    def test_phase0_partial_failure(self, setup_dirs, sample_purchase_order):
+        """測試部分失敗時應回傳 1"""
+        # 建立一個損壞的 PDF
+        corrupt_pdf = setup_dirs["input_dir"] / "進貨驗收單~corrupt.pdf"
+        corrupt_pdf.write_bytes(b"not a pdf")
+
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 1  # 部分失敗

@@ -40,8 +40,9 @@ def run_phase0(
     output_dir.mkdir(parents=True)
 
     # 檢查印章資料夾
-    if not stamps_dir.exists():
-        logger.warning(f"印章資料夾不存在: {stamps_dir}，將跳過蓋章直接複製")
+    stamps_available = stamps_dir.exists()
+    if not stamps_available:
+        logger.info(f"印章資料夾不存在: {stamps_dir}，將跳過蓋章直接複製")
 
     # 掃描 input
     pdf_files = list(input_dir.glob("*.pdf"))
@@ -59,7 +60,11 @@ def run_phase0(
             output_path = output_dir / pdf_path.name
             filename = pdf_path.name
 
-            if filename.startswith("採購單~"):
+            # 無印章資料夾時，所有檔案直接複製
+            if not stamps_available:
+                shutil.copy(pdf_path, output_path)
+                logger.info(f"複製: {filename}")
+            elif filename.startswith("採購單~"):
                 _process_purchase_order(pdf_path, output_path, stamps_dir, logger)
             elif filename.startswith("進貨驗收單~"):
                 _process_receiving(pdf_path, output_path, stamps_dir, logger)
@@ -71,7 +76,7 @@ def run_phase0(
             success_count += 1
 
         except Exception as e:
-            logger.error(f"處理失敗 {pdf_path.name}: {e}")
+            logger.error(f"PDF: {pdf_path.name}", str(e))
             fail_count += 1
 
     # 統計結果
@@ -120,11 +125,11 @@ def _process_purchase_order(
             if vendor_stamp_path:
                 stamps.append((vendor_stamp_path, STAMP_CONFIG_VENDOR))
             else:
-                logger.warning(
+                logger.info(
                     f"{input_path.name} 第 {page_idx + 1} 頁: 找不到供應商章 {vendor_code}"
                 )
         else:
-            logger.warning(
+            logger.info(
                 f"{input_path.name} 第 {page_idx + 1} 頁: 無法解析供商代號"
             )
 
@@ -160,19 +165,21 @@ def _process_receiving(
     doc = fitz.open(input_path)
     page_count = len(doc)
 
-    stamps_config = [
+    # 預先檢查印章是否存在，避免每頁重複警告
+    stamps_config: list[tuple[Path, StampConfig]] = []
+    for stamp_path, config in [
         (stamps_dir / DEFAULT_WAREHOUSE_STAMP, STAMP_CONFIG_WAREHOUSE),
         (stamps_dir / DEFAULT_CREATOR_STAMP, STAMP_CONFIG_CREATOR),
-    ]
+    ]:
+        if stamp_path.exists():
+            stamps_config.append((stamp_path, config))
+        else:
+            logger.info(f"找不到印章: {stamp_path.name}")
 
     for page_idx in range(page_count):
         page = doc[page_idx]
 
         for stamp_path, config in stamps_config:
-            if not stamp_path.exists():
-                logger.warning(f"找不到印章: {stamp_path.name}")
-                continue
-
             with Image.open(stamp_path) as img:
                 orig_w, orig_h = img.size
             new_w, new_h = scale_image_to_fit(
