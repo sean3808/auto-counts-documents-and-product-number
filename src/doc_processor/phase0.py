@@ -5,13 +5,21 @@ import shutil
 from pathlib import Path
 
 import fitz
-from PIL import Image
 
 from .logger import ProcessLogger
 from .stamper.base import StampConfig, find_vendor_stamp, scale_image_to_fit
 
 # 供商代號正則
 REGEX_VENDOR_CODE = r"[A-Z]{2}\d{3}"
+
+
+def _calculate_exit_code(success_count: int, fail_count: int) -> int:
+    """根據成功/失敗數量計算退出碼。"""
+    if fail_count == 0:
+        return 0
+    if success_count == 0:
+        return 2
+    return 1
 
 
 def run_phase0(
@@ -79,15 +87,8 @@ def run_phase0(
             logger.error(f"PDF: {pdf_path.name}", str(e))
             fail_count += 1
 
-    # 統計結果
     logger.info(f"Phase 0 完成: 成功 {success_count}, 失敗 {fail_count}")
-
-    if fail_count == 0:
-        return 0
-    elif success_count == 0:
-        return 2
-    else:
-        return 1
+    return _calculate_exit_code(success_count, fail_count)
 
 
 def _process_purchase_order(
@@ -96,55 +97,45 @@ def _process_purchase_order(
     stamps_dir: Path,
     logger: ProcessLogger,
 ) -> None:
-    """處理採購單：逐頁蓋章"""
+    """處理採購單：逐頁蓋章。"""
     from .stamper.purchase_order import (
         DEFAULT_HANDLER_STAMP,
         STAMP_CONFIG_HANDLER,
         STAMP_CONFIG_VENDOR,
     )
 
-    doc = fitz.open(input_path)
-    page_count = len(doc)
+    handler_stamp_path = stamps_dir / DEFAULT_HANDLER_STAMP
+    handler_exists = handler_stamp_path.exists()
 
-    for page_idx in range(page_count):
-        page = doc[page_idx]
-        text = page.get_text()
+    with fitz.open(input_path) as doc:
+        page_count = len(doc)
+        for page_idx, page in enumerate(doc):
+            text = page.get_text()
+            stamps: list[tuple[Path, StampConfig]] = []
 
-        stamps: list[tuple[Path, StampConfig]] = []
+            if handler_exists:
+                stamps.append((handler_stamp_path, STAMP_CONFIG_HANDLER))
 
-        # 承辦人章
-        handler_stamp_path = stamps_dir / DEFAULT_HANDLER_STAMP
-        if handler_stamp_path.exists():
-            stamps.append((handler_stamp_path, STAMP_CONFIG_HANDLER))
-
-        # 供應商章（從該頁文字解析供商代號）
-        vendor_match = re.search(REGEX_VENDOR_CODE, text)
-        if vendor_match:
-            vendor_code = vendor_match.group()
-            vendor_stamp_path = find_vendor_stamp(vendor_code, stamps_dir)
-            if vendor_stamp_path:
-                stamps.append((vendor_stamp_path, STAMP_CONFIG_VENDOR))
+            vendor_match = re.search(REGEX_VENDOR_CODE, text)
+            if vendor_match:
+                vendor_code = vendor_match.group()
+                vendor_stamp_path = find_vendor_stamp(vendor_code, stamps_dir)
+                if vendor_stamp_path:
+                    stamps.append((vendor_stamp_path, STAMP_CONFIG_VENDOR))
+                else:
+                    logger.info(
+                        f"{input_path.name} 第 {page_idx + 1} 頁: "
+                        f"找不到供應商章 {vendor_code}"
+                    )
             else:
                 logger.info(
-                    f"{input_path.name} 第 {page_idx + 1} 頁: 找不到供應商章 {vendor_code}"
+                    f"{input_path.name} 第 {page_idx + 1} 頁: 無法解析供商代號"
                 )
-        else:
-            logger.info(
-                f"{input_path.name} 第 {page_idx + 1} 頁: 無法解析供商代號"
-            )
 
-        # 蓋章
-        for stamp_path, config in stamps:
-            with Image.open(stamp_path) as img:
-                orig_w, orig_h = img.size
-            new_w, new_h = scale_image_to_fit(
-                orig_w, orig_h, config.target_width, config.target_height
-            )
-            rect = fitz.Rect(config.x, config.y, config.x + new_w, config.y + new_h)
-            page.insert_image(rect, filename=str(stamp_path))
+            _apply_stamps_to_page(page, stamps)
 
-    doc.save(output_path)
-    doc.close()
+        doc.save(output_path)
+
     logger.info(f"採購單蓋章: {input_path.name} ({page_count} 頁)")
 
 
@@ -154,7 +145,7 @@ def _process_receiving(
     stamps_dir: Path,
     logger: ProcessLogger,
 ) -> None:
-    """處理進貨驗收單：每頁蓋章"""
+    """處理進貨驗收單：每頁蓋章。"""
     from .stamper.receiving import (
         DEFAULT_CREATOR_STAMP,
         DEFAULT_WAREHOUSE_STAMP,
@@ -162,32 +153,39 @@ def _process_receiving(
         STAMP_CONFIG_WAREHOUSE,
     )
 
-    doc = fitz.open(input_path)
-    page_count = len(doc)
-
     # 預先檢查印章是否存在，避免每頁重複警告
-    stamps_config: list[tuple[Path, StampConfig]] = []
-    for stamp_path, config in [
+    stamp_candidates = [
         (stamps_dir / DEFAULT_WAREHOUSE_STAMP, STAMP_CONFIG_WAREHOUSE),
         (stamps_dir / DEFAULT_CREATOR_STAMP, STAMP_CONFIG_CREATOR),
-    ]:
+    ]
+    stamps: list[tuple[Path, StampConfig]] = []
+    for stamp_path, config in stamp_candidates:
         if stamp_path.exists():
-            stamps_config.append((stamp_path, config))
+            stamps.append((stamp_path, config))
         else:
             logger.info(f"找不到印章: {stamp_path.name}")
 
-    for page_idx in range(page_count):
-        page = doc[page_idx]
+    with fitz.open(input_path) as doc:
+        page_count = len(doc)
+        for page in doc:
+            _apply_stamps_to_page(page, stamps)
+        doc.save(output_path)
 
-        for stamp_path, config in stamps_config:
-            with Image.open(stamp_path) as img:
-                orig_w, orig_h = img.size
-            new_w, new_h = scale_image_to_fit(
-                orig_w, orig_h, config.target_width, config.target_height
-            )
-            rect = fitz.Rect(config.x, config.y, config.x + new_w, config.y + new_h)
-            page.insert_image(rect, filename=str(stamp_path))
-
-    doc.save(output_path)
-    doc.close()
     logger.info(f"進貨驗收單蓋章: {input_path.name} ({page_count} 頁)")
+
+
+def _apply_stamps_to_page(
+    page: fitz.Page,
+    stamps: list[tuple[Path, StampConfig]],
+) -> None:
+    """將印章列表套用到指定頁面。"""
+    from PIL import Image
+
+    for stamp_path, config in stamps:
+        with Image.open(stamp_path) as img:
+            orig_w, orig_h = img.size
+        new_w, new_h = scale_image_to_fit(
+            orig_w, orig_h, config.target_width, config.target_height
+        )
+        rect = fitz.Rect(config.x, config.y, config.x + new_w, config.y + new_h)
+        page.insert_image(rect, filename=str(stamp_path))
