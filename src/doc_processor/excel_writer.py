@@ -10,6 +10,7 @@ def write_summary(
     output_path: Path,
     quantity: int,  # 支數 → B3
     sheet_count: int,  # 張數 → C3
+    purchase_order_no: str,  # 採購單號 → G2
 ) -> None:
     """
     讀取 Excel 模板，填入支數和張數，另存新檔
@@ -19,6 +20,7 @@ def write_summary(
         output_path: 輸出檔案路徑 ({採購單號}-單據明細.xlsx)
         quantity: 支數，填入 B3
         sheet_count: 張數，填入 C3
+        purchase_order_no: 採購單號，填入 G2
     """
     # 讀取模板（不修改原檔）
     wb = load_workbook(template_path)
@@ -27,6 +29,7 @@ def write_summary(
     # 填入數值
     ws["B3"] = quantity  # 支數
     ws["C3"] = sheet_count  # 張數
+    ws["G2"] = purchase_order_no  # 採購單號
 
     # 另存新檔
     wb.save(output_path)

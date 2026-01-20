@@ -18,7 +18,8 @@ from .stamper.goods_receipt import (
 from .stamper.purchase_order import (
     DEFAULT_HANDLER_STAMP as PO_HANDLER_STAMP,
     STAMP_CONFIG_HANDLER as PO_HANDLER_CONFIG,
-    STAMP_CONFIG_VENDOR as PO_VENDOR_CONFIG,
+    VendorStampConfigError,
+    get_vendor_stamp_config,
 )
 from .stamper.purchase_requisition import (
     DEFAULT_CREATOR_STAMP as PR_CREATOR_STAMP,
@@ -37,14 +38,14 @@ REGEX_VENDOR_CODE = r"[A-Z]{2}\d{3}"
 # === 自然化設定 ===
 # 旋轉角度範圍（整數，度）
 # PIL rotate: 正值=逆時針，負值=順時針
-ROTATION_MIN_DEGREES = -3  # 順時針 3°
-ROTATION_MAX_DEGREES = 6   # 逆時針 6°
+ROTATION_MIN_DEGREES = -3
+ROTATION_MAX_DEGREES = 9
 
 # 位移範圍（pt，1pt ≈ 0.35mm）
 OFFSET_X_MIN = 0
-OFFSET_X_MAX = 8  # 右移 0~8pt
+OFFSET_X_MAX = 8
 OFFSET_Y_MIN = 0
-OFFSET_Y_MAX = 6  # 下移 0~6pt
+OFFSET_Y_MAX = 6
 
 
 def run_phase0(
@@ -152,7 +153,15 @@ def _process_purchase_order(
                 vendor_code = vendor_match.group()
                 vendor_stamp_path = find_vendor_stamp(vendor_code, stamps_dir)
                 if vendor_stamp_path:
-                    stamps.append((vendor_stamp_path, PO_VENDOR_CONFIG))
+                    try:
+                        vendor_config = get_vendor_stamp_config(vendor_code)
+                        if vendor_config:
+                            stamps.append((vendor_stamp_path, vendor_config))
+                    except VendorStampConfigError as e:
+                        logger.error(
+                            f"{input_path.name} 第 {page_idx + 1} 頁",
+                            str(e).split("\n")[0],
+                        )
                 else:
                     logger.info(
                         f"{input_path.name} 第 {page_idx + 1} 頁: "

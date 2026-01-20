@@ -8,7 +8,8 @@ from PIL import Image
 
 from doc_processor.stamper.purchase_order import (
     STAMP_CONFIG_HANDLER,
-    STAMP_CONFIG_VENDOR,
+    VENDOR_STAMP_X,
+    VENDOR_STAMP_Y,
     stamp_purchase_order,
 )
 
@@ -21,10 +22,10 @@ class TestPurchaseOrderStampConfigs:
         assert STAMP_CONFIG_HANDLER.x == pytest.approx(335.6, rel=0.1)
         assert STAMP_CONFIG_HANDLER.y == pytest.approx(729.8, rel=0.1)
 
-    def test_vendor_stamp_config(self):
-        """測試承製廠商印章配置"""
-        assert STAMP_CONFIG_VENDOR.x == pytest.approx(382.7, rel=0.1)
-        assert STAMP_CONFIG_VENDOR.y == pytest.approx(612.6, rel=0.1)
+    def test_vendor_stamp_position(self):
+        """測試承製廠商印章位置常數"""
+        assert VENDOR_STAMP_X == pytest.approx(382.7, rel=0.1)
+        assert VENDOR_STAMP_Y == pytest.approx(612.6, rel=0.1)
 
 
 class TestStampPurchaseOrder:

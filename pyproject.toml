@@ -8,6 +8,8 @@ dependencies = [
     "openpyxl>=3.1.0",
     "pillow>=12.1.0",
     "numpy>=2.4.1",
+    "opencv-python>=4.13.0.90",
+    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]

@@ -88,7 +88,7 @@ def _process_pdf(
 
     output_excel = output_dir / f"{purchase_order_no}-單據明細.xlsx"
     try:
-        write_summary(template_path, output_excel, quantity, sheet_count)
+        write_summary(template_path, output_excel, quantity, sheet_count, purchase_order_no)
         logger.ok(f"輸出: {output_excel.name}")
         return True
     except Exception as e:

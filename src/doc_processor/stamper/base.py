@@ -1,12 +1,87 @@
 """蓋章基礎功能模組"""
 
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import fitz
 import numpy as np
+import yaml
 from PIL import Image
+
+# 常數：1 cm = 28.35 pt (72 pt/inch ÷ 2.54 cm/inch)
+CM_TO_PT = 28.35
+
+
+@dataclass
+class VendorStampSize:
+    """供應商印章期望列印尺寸 (cm)"""
+
+    width_cm: float
+    height_cm: float
+
+
+@dataclass
+class StampsConfig:
+    """印章配置（從 YAML 讀取）"""
+
+    print_scale: float
+    vendors: dict[str, VendorStampSize] = field(default_factory=dict)
+
+
+def load_stamps_config(config_path: Path | None = None) -> StampsConfig:
+    """
+    讀取印章尺寸配置檔。
+
+    Args:
+        config_path: 配置檔路徑，預設為專案根目錄的 config/stamps.yaml
+
+    Returns:
+        StampsConfig 物件
+    """
+    if config_path is None:
+        # 預設路徑：專案根目錄/config/stamps.yaml
+        config_path = Path(__file__).parent.parent.parent.parent / "config" / "stamps.yaml"
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"找不到印章配置檔：{config_path}")
+
+    with open(config_path, encoding="utf-8") as f:
+        data: dict[str, Any] = yaml.safe_load(f)
+
+    print_scale = data.get("print_scale", 1.0)
+    vendors_data = data.get("vendors", {})
+
+    vendors: dict[str, VendorStampSize] = {}
+    for vendor_code, size_data in vendors_data.items():
+        vendors[vendor_code.upper()] = VendorStampSize(
+            width_cm=size_data["width_cm"],
+            height_cm=size_data["height_cm"],
+        )
+
+    return StampsConfig(print_scale=print_scale, vendors=vendors)
+
+
+def get_target_pt(
+    width_cm: float, height_cm: float, print_scale: float
+) -> tuple[float, float]:
+    """
+    從期望列印尺寸 (cm) 計算所需的 PDF 目標框尺寸 (pt)。
+
+    考慮列印環境的縮放比例進行補償。
+
+    Args:
+        width_cm: 期望列印寬度 (cm)
+        height_cm: 期望列印高度 (cm)
+        print_scale: 列印縮放比例（如 0.97 表示列印會縮小到 97%）
+
+    Returns:
+        (target_width_pt, target_height_pt) 目標框尺寸
+    """
+    target_width_pt = width_cm / print_scale * CM_TO_PT
+    target_height_pt = height_cm / print_scale * CM_TO_PT
+    return target_width_pt, target_height_pt
 
 
 @dataclass
