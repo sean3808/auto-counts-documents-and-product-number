@@ -3,7 +3,7 @@
 驗收 Issue #4：
 1. 端到端執行 Phase 0，驗證紡織類四類單據產出均符合預期對照印章配置。
 2. 比對 Phase 0 產出 PDF 圖片數量與座標中心點，確認在預期公差範圍內。
-3. 驗證 Phase 1 產出合併 PDF 命名為 1011506080001-GL012-金利多企業.pdf，且順序為 進貨單 > 進貨驗收單 > 採購單 > 請購單。
+3. 驗證 Phase 1 產出合併 PDF 命名為 1011506080001-GL012-金利多企.pdf（ERP 原生文字層簡稱截斷），且順序為 進貨單 > 進貨驗收單 > 採購單 > 請購單。
 4. 驗證 Phase 2 正確產出 Excel 單據明細表，且張數（1 張，依單據號碼計）與支數（1 支）正確填入 B3 與 C3。
 5. 確保全流程各階段與既有測試整合相容。
 """
@@ -12,8 +12,8 @@ import shutil
 from pathlib import Path
 
 import fitz
-from openpyxl import load_workbook
 import pytest
+from openpyxl import load_workbook
 
 from doc_processor.logger import ProcessLogger
 from doc_processor.phase0 import run_phase0
@@ -162,7 +162,7 @@ class TestTextileEndToEnd:
     def test_phase1_textile_merging(self, textile_env):
         """
         驗收條件 3：
-        - 驗證 Phase 1 產出合併 PDF 命名為 1011506080001-GL012-金利多企業.pdf
+        - 驗證 Phase 1 產出合併 PDF 命名為 1011506080001-GL012-金利多企.pdf（ERP 原生文字層簡稱截斷）
         - 單據合併順序符合「進貨單 > 進貨驗收單 > 採購單 > 請購單」
         """
         logger = ProcessLogger(textile_env["output_dir"])

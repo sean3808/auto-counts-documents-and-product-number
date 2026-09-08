@@ -76,10 +76,32 @@ def detect_business_category(text: str) -> BusinessCategory:
     - 單位包含「碼」或品名/備註包含「布」/「胚布」時識別為紡織類
     - 其餘預設為染料類
 
-    注意：需排除「號碼」（如「傳真號碼：」）對「碼」的干擾。
+    防禦性排除：
+    - 排除供商名稱對「布」的誤判（例如供商名稱包含「布」）
+    - 排除非單位性質代碼對「碼」的誤判（如「傳真號碼」、「電話號碼」、「單據號碼」、「條碼」、「編碼」、「代碼」、「密碼」）
     """
-    text_without_haoma = text.replace("號碼", "")
-    if "布" in text or "碼" in text_without_haoma:
+    if not text or not text.strip():
+        return BusinessCategory.DYE
+
+    # 排除供商名稱干擾
+    _, vendor_name = extract_vendor_info(text)
+    filtered_text = text
+    if vendor_name:
+        filtered_text = filtered_text.replace(vendor_name, "")
+
+    # 排除非單位性質的「碼」字詞
+    non_unit_code_words = ["號碼", "條碼", "編碼", "代碼", "密碼"]
+    code_filtered_text = filtered_text
+    for word in non_unit_code_words:
+        code_filtered_text = code_filtered_text.replace(word, "")
+
+    # 檢查品名/備註是否包含「布」或「胚布」
+    has_cloth = "布" in filtered_text
+
+    # 檢查單位或數量規格是否包含「碼」
+    has_yard = "碼" in code_filtered_text
+
+    if has_cloth or has_yard:
         return BusinessCategory.TEXTILE
     return BusinessCategory.DYE
 

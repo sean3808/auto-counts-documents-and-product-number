@@ -68,6 +68,23 @@ class TestDetectBusinessCategory:
         text = "傳真號碼：02-26007686\n驗收單號：11501020016\n品名: SODIUM HYDROSULPHITE\n單位: KG\n"
         assert detect_business_category(text) == BusinessCategory.DYE
 
+    def test_dye_with_vendor_name_containing_cloth(self):
+        """排除供商名稱包含「布」時對紡織類的誤判"""
+        text = (
+            "供商代號：\n供商簡稱：\nGL999\n布瑞特化工\n"
+            "品名: SODIUM HYDROSULPHITE\n單位: KG\n"
+        )
+        assert detect_business_category(text) == BusinessCategory.DYE
+
+    def test_dye_with_barcode_and_code(self):
+        """排除條碼、編碼、代碼等非單位關鍵字對「碼」的誤判"""
+        text = (
+            "傳真號碼：02-26007686\n"
+            "備註: 條碼確認無誤，產品編碼對齊\n"
+            "品名: SODIUM HYDROSULPHITE\n單位: KG\n"
+        )
+        assert detect_business_category(text) == BusinessCategory.DYE
+
     def test_dye_empty_text(self):
         """空文字預設為染料類"""
         assert detect_business_category("") == BusinessCategory.DYE

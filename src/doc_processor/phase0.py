@@ -144,7 +144,7 @@ def run_phase0(
                 shutil.copy(pdf_path, output_path)
                 logger.ok(f"複製: {filename}")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"PDF: {pdf_path.name}", str(e))
 
     return logger.finish("Phase 0")
@@ -206,33 +206,34 @@ def _process_receiving(
     stamps_dir: Path,
     logger: ProcessLogger,
 ) -> None:
-    """處理進貨驗收單：每頁辨識業務類別並蓋章。"""
+    """處理進貨驗收單：依整份單據文字層辨識業務類別並蓋章。"""
     with fitz.open(input_path) as doc:
         page_count = len(doc)
-        for page in doc:
-            text = page.get_text()
-            category = detect_business_category(text)
+        # 依全文件文字辨識業務類別，避免多頁單據後續頁面因未重複關鍵字而誤判
+        full_text = "\n".join(page.get_text() for page in doc)
+        category = detect_business_category(full_text)
 
-            stamps: list[tuple[Path, StampConfig]] = []
-            if category == BusinessCategory.TEXTILE:
-                # 紡織類：進料檢驗章 + 製單章（嚴格排除倉管章）
-                stamp_candidates = [
-                    (stamps_dir / RCV_INSPECTION_STAMP, RCV_INSPECTION_CONFIG),
-                    (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
-                ]
+        stamps: list[tuple[Path, StampConfig]] = []
+        if category == BusinessCategory.TEXTILE:
+            # 紡織類：進料檢驗章 + 製單章（嚴格排除倉管章）
+            stamp_candidates = [
+                (stamps_dir / RCV_INSPECTION_STAMP, RCV_INSPECTION_CONFIG),
+                (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
+            ]
+        else:
+            # 染料類：倉管章 + 製單章
+            stamp_candidates = [
+                (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
+                (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
+            ]
+
+        for stamp_path, config in stamp_candidates:
+            if stamp_path.exists():
+                stamps.append((stamp_path, config))
             else:
-                # 染料類：倉管章 + 製單章
-                stamp_candidates = [
-                    (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
-                    (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
-                ]
+                logger.info(f"找不到印章: {stamp_path.name}")
 
-            for stamp_path, config in stamp_candidates:
-                if stamp_path.exists():
-                    stamps.append((stamp_path, config))
-                else:
-                    logger.info(f"找不到印章: {stamp_path.name}")
-
+        for page in doc:
             _apply_stamps_to_page(page, stamps)
 
         doc.save(output_path)

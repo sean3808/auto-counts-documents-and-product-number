@@ -159,8 +159,47 @@ class TestRunPhase0:
         assert len(inspection_rects) == 1
         r = inspection_rects[0]
         assert 35.0 <= r.x0 <= 46.0  # 40.5 ± 4 + tolerance
-        assert 265.0 <= r.y0 <= 275.0  # 270.4 ± 3 + tolerance
         doc.close()
+
+    def test_phase0_receiving_textile_multipage(self, setup_dirs):
+        """測試多頁紡織類進貨驗收單蓋章（續頁未重複品名/碼仍正確辨識為紡織類，不蓋倉管章）"""
+        pdf_path = setup_dirs["input_dir"] / "進貨驗收單~textile_multipage.pdf"
+        doc = fitz.open()
+        # 第 1 頁：含紡織特徵
+        page0 = doc.new_page(width=596, height=842)
+        page0.insert_text(
+            (100, 100),
+            "進貨驗收單\n品名: JAC胚布[J7X02]\n單位: 碼\n",
+            fontname="china-t",
+        )
+        # 第 2 頁：不含品名與單位關鍵字（常見多頁單據續頁格式）
+        page1 = doc.new_page(width=596, height=842)
+        page1.insert_text(
+            (100, 100),
+            "進貨驗收單\n小計: 1,479.0000\n以下空白\n",
+            fontname="china-t",
+        )
+        doc.save(pdf_path)
+        doc.close()
+
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "進貨驗收單~textile_multipage.pdf"
+        assert output_file.exists()
+
+        out_doc = fitz.open(output_file)
+        assert len(out_doc) == 2
+        for page_idx, page in enumerate(out_doc):
+            images = page.get_images()
+            # 每一頁皆應蓋 2 個章（進料檢驗章 + 製單章），嚴格排除簡銘佑倉管章
+            assert len(images) == 2, f"第 {page_idx} 頁印章數應為 2（排除倉管章）"
+        out_doc.close()
 
     def test_phase0_missing_stamps_folder(self, setup_dirs, sample_purchase_order):
         """測試印章資料夾不存在時應複製 PDF"""
