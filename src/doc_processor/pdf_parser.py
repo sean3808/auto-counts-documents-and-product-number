@@ -17,6 +17,12 @@ class DocType(Enum):
     UNKNOWN = "未知"
 
 
+class BusinessCategory(Enum):
+    """業務類別"""
+    DYE = "染料類"
+    TEXTILE = "紡織類"
+
+
 # 正則表達式（用於獨立行匹配）
 REGEX_PURCHASE_ORDER_NO_VALUE = re.compile(r"^1[0-9]{12}$")  # 採購單號值
 REGEX_PURCHASE_REQUEST_NO_VALUE = re.compile(r"^1A[0-9]{11}$")  # 請購單號值
@@ -60,6 +66,22 @@ def detect_doc_type(filename: str) -> DocType:
     elif filename.startswith("請購單"):
         return DocType.PURCHASE_REQUEST
     return DocType.UNKNOWN
+
+
+def detect_business_category(text: str) -> BusinessCategory:
+    """
+    依據進貨驗收單文字層內容自動辨識業務類別。
+
+    規則：
+    - 單位包含「碼」或品名/備註包含「布」/「胚布」時識別為紡織類
+    - 其餘預設為染料類
+
+    注意：需排除「號碼」（如「傳真號碼：」）對「碼」的干擾。
+    """
+    text_without_haoma = text.replace("號碼", "")
+    if "布" in text or "碼" in text_without_haoma:
+        return BusinessCategory.TEXTILE
+    return BusinessCategory.DYE
 
 
 def extract_text(pdf_path: Path) -> str:

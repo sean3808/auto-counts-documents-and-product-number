@@ -92,6 +92,7 @@ class StampConfig:
     y: float  # 左上角 y 座標 (pt)
     target_width: float  # 目標寬度 (pt)
     target_height: float  # 目標高度 (pt)
+    remove_background: bool = True  # 是否去背（進料檢驗章等原圖免去背者設為 False）
 
 
 def scale_image_to_fit(
@@ -221,7 +222,8 @@ def stamp_pdf(
         with Image.open(stamp_path) as img:
             orig_width, orig_height = img.size
 
-            if remove_background:
+            should_remove_bg = remove_background and getattr(config, "remove_background", True)
+            if should_remove_bg:
                 # 去除白色背景
                 img = remove_white_background(img)
                 # 將處理後的圖片轉為 bytes

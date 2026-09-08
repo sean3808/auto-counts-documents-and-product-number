@@ -5,18 +5,20 @@ from pathlib import Path
 import pytest
 
 from doc_processor.pdf_parser import (
+    BusinessCategory,
     DocType,
     count_document_numbers,
     count_sequence_numbers,
+    detect_business_category,
     detect_doc_type,
+    extract_purchase_order_no_from_filename,
     extract_purchase_order_no_from_goods_receipt_text,
     extract_purchase_order_nos_from_goods_receipt_pages,
-    extract_purchase_order_no_from_filename,
     extract_text,
     extract_text_by_page,
     find_purchase_order_page,
-    parse_documents,
     parse_document,
+    parse_documents,
 )
 
 
@@ -41,6 +43,34 @@ class TestDetectDocType:
 
     def test_unknown(self):
         assert detect_doc_type("unknown.pdf") == DocType.UNKNOWN
+
+
+class TestDetectBusinessCategory:
+    """業務類別判斷測試"""
+
+    def test_textile_by_unit_yard(self):
+        """單位包含「碼」識別為紡織類"""
+        text = "品名: 彈性布料\n驗收數量: 100.00\n單位: 碼\n"
+        assert detect_business_category(text) == BusinessCategory.TEXTILE
+
+    def test_textile_by_product_name_embryo_cloth(self):
+        """品名包含「胚布」識別為紡織類"""
+        text = "品名: JAC胚布[J7X02]\n數量: 2500\n單位: KG\n"
+        assert detect_business_category(text) == BusinessCategory.TEXTILE
+
+    def test_textile_by_remark_cloth(self):
+        """備註包含「布」識別為紡織類"""
+        text = "備註: 每批布不得低於40碼，並請將每疋胚布完成套袋包裝\n"
+        assert detect_business_category(text) == BusinessCategory.TEXTILE
+
+    def test_dye_default_with_fax_number(self):
+        """排除「傳真號碼：」干擾，一般化工染料識別為染料類"""
+        text = "傳真號碼：02-26007686\n驗收單號：11501020016\n品名: SODIUM HYDROSULPHITE\n單位: KG\n"
+        assert detect_business_category(text) == BusinessCategory.DYE
+
+    def test_dye_empty_text(self):
+        """空文字預設為染料類"""
+        assert detect_business_category("") == BusinessCategory.DYE
 
 
 class TestParseDocument:

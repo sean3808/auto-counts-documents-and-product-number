@@ -10,25 +10,46 @@ import fitz
 from PIL import Image
 
 from .logger import ProcessLogger
+from .pdf_parser import BusinessCategory, detect_business_category
 from .stamper.base import StampConfig, find_vendor_stamp, scale_image_to_fit
 from .stamper.goods_receipt import (
     DEFAULT_CREATOR_STAMP as GR_CREATOR_STAMP,
+)
+from .stamper.goods_receipt import (
     STAMP_CONFIG_CREATOR as GR_STAMP_CONFIG,
 )
 from .stamper.purchase_order import (
     DEFAULT_HANDLER_STAMP as PO_HANDLER_STAMP,
+)
+from .stamper.purchase_order import (
     STAMP_CONFIG_HANDLER as PO_HANDLER_CONFIG,
+)
+from .stamper.purchase_order import (
     VendorStampConfigError,
     get_vendor_stamp_config,
 )
 from .stamper.purchase_requisition import (
     DEFAULT_CREATOR_STAMP as PR_CREATOR_STAMP,
+)
+from .stamper.purchase_requisition import (
     STAMP_CONFIG_CREATOR as PR_STAMP_CONFIG,
 )
 from .stamper.receiving import (
     DEFAULT_CREATOR_STAMP as RCV_CREATOR_STAMP,
+)
+from .stamper.receiving import (
+    DEFAULT_INSPECTION_STAMP as RCV_INSPECTION_STAMP,
+)
+from .stamper.receiving import (
     DEFAULT_WAREHOUSE_STAMP as RCV_WAREHOUSE_STAMP,
+)
+from .stamper.receiving import (
     STAMP_CONFIG_CREATOR as RCV_CREATOR_CONFIG,
+)
+from .stamper.receiving import (
+    STAMP_CONFIG_INSPECTION as RCV_INSPECTION_CONFIG,
+)
+from .stamper.receiving import (
     STAMP_CONFIG_WAREHOUSE as RCV_WAREHOUSE_CONFIG,
 )
 
@@ -185,22 +206,35 @@ def _process_receiving(
     stamps_dir: Path,
     logger: ProcessLogger,
 ) -> None:
-    """處理進貨驗收單：每頁蓋章。"""
-    stamp_candidates = [
-        (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
-        (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
-    ]
-    stamps: list[tuple[Path, StampConfig]] = []
-    for stamp_path, config in stamp_candidates:
-        if stamp_path.exists():
-            stamps.append((stamp_path, config))
-        else:
-            logger.info(f"找不到印章: {stamp_path.name}")
-
+    """處理進貨驗收單：每頁辨識業務類別並蓋章。"""
     with fitz.open(input_path) as doc:
         page_count = len(doc)
         for page in doc:
+            text = page.get_text()
+            category = detect_business_category(text)
+
+            stamps: list[tuple[Path, StampConfig]] = []
+            if category == BusinessCategory.TEXTILE:
+                # 紡織類：進料檢驗章 + 製單章（嚴格排除倉管章）
+                stamp_candidates = [
+                    (stamps_dir / RCV_INSPECTION_STAMP, RCV_INSPECTION_CONFIG),
+                    (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
+                ]
+            else:
+                # 染料類：倉管章 + 製單章
+                stamp_candidates = [
+                    (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
+                    (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
+                ]
+
+            for stamp_path, config in stamp_candidates:
+                if stamp_path.exists():
+                    stamps.append((stamp_path, config))
+                else:
+                    logger.info(f"找不到印章: {stamp_path.name}")
+
             _apply_stamps_to_page(page, stamps)
+
         doc.save(output_path)
 
     logger.detail(f"已處理 {page_count} 頁")

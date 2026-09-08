@@ -36,6 +36,9 @@ class TestRunPhase0:
         vendor_stamp = Image.new("RGBA", (200, 150), (0, 0, 255, 128))
         vendor_stamp.save(stamps_dir / "TW111.png")
 
+        inspection_stamp = Image.new("RGB", (700, 470), (255, 255, 255))
+        inspection_stamp.save(stamps_dir / "紡織進料檢.png")
+
         return {
             "input_dir": input_dir,
             "output_dir": output_dir,
@@ -57,11 +60,22 @@ class TestRunPhase0:
 
     @pytest.fixture
     def sample_receiving(self, setup_dirs) -> Path:
-        """建立測試用進貨驗收單 PDF"""
+        """建立測試用進貨驗收單 PDF（染料類）"""
         pdf_path = setup_dirs["input_dir"] / "進貨驗收單~test.pdf"
         doc = fitz.open()
         page = doc.new_page(width=612, height=791)
-        page.insert_text((100, 100), "進貨驗收單")
+        page.insert_text((100, 100), "進貨驗收單\n品名: SODIUM HYDROSULPHITE\n單位: KG\n", fontname="china-t")
+        doc.save(pdf_path)
+        doc.close()
+        return pdf_path
+
+    @pytest.fixture
+    def sample_textile_receiving(self, setup_dirs) -> Path:
+        """建立測試用進貨驗收單 PDF（紡織類）"""
+        pdf_path = setup_dirs["input_dir"] / "進貨驗收單~textile.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=612, height=791)
+        page.insert_text((100, 100), "進貨驗收單\n品名: JAC胚布[J7X02]\n單位: 碼\n", fontname="china-t")
         doc.save(pdf_path)
         doc.close()
         return pdf_path
@@ -117,6 +131,36 @@ class TestRunPhase0:
         images = doc[0].get_images()
         doc.close()
         assert len(images) == 2  # 倉管章 + 製單章
+
+    def test_phase0_receiving_textile(self, setup_dirs, sample_textile_receiving):
+        """測試紡織類進貨驗收單蓋章（進料檢驗章 + 製單章，排除倉管章）"""
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "進貨驗收單~textile.pdf"
+        assert output_file.exists()
+
+        doc = fitz.open(output_file)
+        page = doc[0]
+        images = page.get_images()
+        # 應有 2 個印章：進料檢驗章 + 製單章
+        assert len(images) == 2
+
+        # 驗證進料檢驗章的位置（基準 x=40.5, y=270.4，微抖動 x∈[-4, 4], y∈[-3, 3]）
+        img_rects = [page.get_image_rects(img[0])[0] for img in images]
+        # 進料檢驗章寬度較大（約 221.4 pt）
+        inspection_rects = [r for r in img_rects if r.width > 100]
+        assert len(inspection_rects) == 1
+        r = inspection_rects[0]
+        assert 35.0 <= r.x0 <= 46.0  # 40.5 ± 4 + tolerance
+        assert 265.0 <= r.y0 <= 275.0  # 270.4 ± 3 + tolerance
+        doc.close()
 
     def test_phase0_missing_stamps_folder(self, setup_dirs, sample_purchase_order):
         """測試印章資料夾不存在時應複製 PDF"""
@@ -250,6 +294,7 @@ class TestVendorSpecialConfig:
     def test_tw111_uses_yaml_config(self, setup_dirs):
         """測試 TW111 使用 YAML 配置的尺寸"""
         from unittest.mock import patch
+
         from doc_processor.stamper.base import get_target_pt, load_stamps_config
 
         # 從 YAML 讀取期望尺寸
@@ -303,6 +348,7 @@ class TestVendorSpecialConfig:
     def test_tw113_uses_yaml_config(self, setup_dirs):
         """測試 TW113 使用 YAML 配置的尺寸"""
         from unittest.mock import patch
+
         from doc_processor.stamper.base import get_target_pt, load_stamps_config
 
         # 從 YAML 讀取期望尺寸
