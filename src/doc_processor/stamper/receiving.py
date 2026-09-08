@@ -13,10 +13,10 @@ STAMP_CONFIG_WAREHOUSE = StampConfig(
 )
 
 STAMP_CONFIG_CREATOR = StampConfig(
-    x=498.7,
-    y=737.9,
-    target_width=32.0,
-    target_height=17.0,
+    x=508.2,
+    y=743.8,
+    target_width=32.1,
+    target_height=17.3,
 )
 
 # 預設印章檔名

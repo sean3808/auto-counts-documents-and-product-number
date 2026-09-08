@@ -6,8 +6,8 @@ import fitz
 import pytest
 from PIL import Image
 
-from doc_processor.phase0 import run_phase0
 from doc_processor.logger import ProcessLogger
+from doc_processor.phase0 import run_phase0
 
 
 class TestRunPhase0:
@@ -380,3 +380,29 @@ class TestVendorSpecialConfig:
             images = out_doc[0].get_images()
             # 應只有 1 個印章（承辦人章），因為供應商章因配置缺失被跳過
             assert len(images) == 1, "未配置的供應商印章應被跳過"
+
+
+class TestNaturalizationConfig:
+    """影像自然化微抖動與旋轉配置測試"""
+
+    def test_rotation_range(self):
+        """測試旋轉範圍收斂至 -3° ~ +3°"""
+        from doc_processor.phase0 import ROTATION_MAX_DEGREES, ROTATION_MIN_DEGREES
+
+        assert ROTATION_MIN_DEGREES == -3
+        assert ROTATION_MAX_DEGREES == 3
+
+    def test_offset_range(self):
+        """測試對稱微抖動位移範圍（x ∈ [-4, +4], y ∈ [-3, +3]）"""
+        from doc_processor.phase0 import (
+            OFFSET_X_MAX,
+            OFFSET_X_MIN,
+            OFFSET_Y_MAX,
+            OFFSET_Y_MIN,
+        )
+
+        assert OFFSET_X_MIN == -4
+        assert OFFSET_X_MAX == 4
+        assert OFFSET_Y_MIN == -3
+        assert OFFSET_Y_MAX == 3
+

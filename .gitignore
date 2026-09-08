@@ -53,3 +53,4 @@ output/
 # 暫存與歷史歸檔
 temp/
 archive/
+session-continuity.md

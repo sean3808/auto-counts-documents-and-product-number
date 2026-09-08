@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 # 採購單印章配置（座標從範本 PDF 取得）
 STAMP_CONFIG_HANDLER = StampConfig(
-    x=335.6,
-    y=729.8,
-    target_width=30.0,
-    target_height=17.0,
+    x=342.8,
+    y=736.7,
+    target_width=32.1,
+    target_height=17.3,
 )
 
 # 供應商印章位置（座標固定，尺寸從 YAML 配置讀取）
@@ -74,8 +74,6 @@ def get_vendor_stamp_config(vendor_code: str) -> StampConfig | None:
 
 class VendorStampConfigError(Exception):
     """供應商印章配置錯誤"""
-
-    pass
 
 
 def stamp_purchase_order(

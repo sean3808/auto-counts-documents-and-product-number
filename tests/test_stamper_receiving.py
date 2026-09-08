@@ -7,8 +7,8 @@ import pytest
 from PIL import Image
 
 from doc_processor.stamper.receiving import (
-    STAMP_CONFIG_WAREHOUSE,
     STAMP_CONFIG_CREATOR,
+    STAMP_CONFIG_WAREHOUSE,
     stamp_receiving,
 )
 
@@ -22,9 +22,11 @@ class TestReceivingStampConfigs:
         assert STAMP_CONFIG_WAREHOUSE.y == pytest.approx(743.3, rel=0.1)
 
     def test_creator_stamp_config(self):
-        """測試製單人員印章配置"""
-        assert STAMP_CONFIG_CREATOR.x == pytest.approx(498.7, rel=0.1)
-        assert STAMP_CONFIG_CREATOR.y == pytest.approx(737.9, rel=0.1)
+        """測試製單人員印章配置（基準座標與尺寸）"""
+        assert STAMP_CONFIG_CREATOR.x == pytest.approx(508.2, abs=0.01)
+        assert STAMP_CONFIG_CREATOR.y == pytest.approx(743.8, abs=0.01)
+        assert STAMP_CONFIG_CREATOR.target_width == pytest.approx(32.1, abs=0.01)
+        assert STAMP_CONFIG_CREATOR.target_height == pytest.approx(17.3, abs=0.01)
 
 
 class TestStampReceiving:

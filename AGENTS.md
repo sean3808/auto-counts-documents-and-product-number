@@ -23,7 +23,7 @@ input/*.pdf (+ 印章/removebg/) ➔ Phase 0 (蓋章) ➔ temp/stamped/ ➔ Phas
    - **進貨驗收單**：倉管章（簡銘佑）+ 製單章（雅萍）。
    - **進貨單**：製單章（雅萍）。
    - **請購單**：製單章（雅萍）。
-3. **影像自然化**：每頁印章隨機微旋轉（-3° ~ +9°）與隨機微位移（右移 0~8pt、下移 0~6pt）。
+3. **影像自然化**：每頁印章隨機微旋轉（-3° ~ +3°）與隨機對稱微位移（x: -4~+4pt、y: -3~+3pt）。
 4. 輸出至 `temp/stamped/{原檔名}`。
 
 #### Phase 1：PDF 分組合併
@@ -148,3 +148,5 @@ Canonical five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`,
 ### Domain docs
 
 Single-context (`CONTEXT.md` + `docs/adr/` at repo root). See `docs/agents/domain.md`.
+
+> 復原進行中的工作前，先讀專案根目錄的 `session-continuity.md`（跨-agent session 交接狀態，由 /session-park 維護）。

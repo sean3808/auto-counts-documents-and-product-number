@@ -18,9 +18,11 @@ class TestPurchaseOrderStampConfigs:
     """採購單印章配置測試"""
 
     def test_handler_stamp_config(self):
-        """測試承辦人印章配置"""
-        assert STAMP_CONFIG_HANDLER.x == pytest.approx(335.6, rel=0.1)
-        assert STAMP_CONFIG_HANDLER.y == pytest.approx(729.8, rel=0.1)
+        """測試承辦人印章配置（基準座標與尺寸）"""
+        assert STAMP_CONFIG_HANDLER.x == pytest.approx(342.8, abs=0.01)
+        assert STAMP_CONFIG_HANDLER.y == pytest.approx(736.7, abs=0.01)
+        assert STAMP_CONFIG_HANDLER.target_width == pytest.approx(32.1, abs=0.01)
+        assert STAMP_CONFIG_HANDLER.target_height == pytest.approx(17.3, abs=0.01)
 
     def test_vendor_stamp_position(self):
         """測試承製廠商印章位置常數"""

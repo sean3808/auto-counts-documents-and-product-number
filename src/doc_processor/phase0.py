@@ -39,13 +39,13 @@ REGEX_VENDOR_CODE = r"[A-Z]{2}\d{3}"
 # 旋轉角度範圍（整數，度）
 # PIL rotate: 正值=逆時針，負值=順時針
 ROTATION_MIN_DEGREES = -3
-ROTATION_MAX_DEGREES = 9
+ROTATION_MAX_DEGREES = 3
 
-# 位移範圍（pt，1pt ≈ 0.35mm）
-OFFSET_X_MIN = 0
-OFFSET_X_MAX = 8
-OFFSET_Y_MIN = 0
-OFFSET_Y_MAX = 6
+# 位移範圍（pt，1pt ≈ 0.35mm，對稱微抖動）
+OFFSET_X_MIN = -4
+OFFSET_X_MAX = 4
+OFFSET_Y_MIN = -3
+OFFSET_Y_MAX = 3
 
 
 def run_phase0(
