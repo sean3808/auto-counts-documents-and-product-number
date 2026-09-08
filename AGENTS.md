@@ -70,6 +70,9 @@ auto-counts-documents-and-product-number/
 ├── run.bat                 # Windows 批次檔入口（雙擊執行）
 ├── pyproject.toml          # uv 專案設定
 ├── template.xlsx           # Excel 模板（B3=支數, C3=張數）
+├── CONTEXT.md              # 領域模型詞彙表
+├── docs/                   # 專案文件
+│   └── prds/               # 需求規格（document-processing.md, auto-printing.md）
 ├── src/doc_processor/
 │   ├── cli.py              # CLI 入口，調度 phase0/phase1/phase2/all
 │   ├── phase0.py           # Phase 0：PDF 蓋章與影像自然化
@@ -83,8 +86,12 @@ auto-counts-documents-and-product-number/
 ├── input/                  # 待處理 PDF 來源（gitignore，嚴禁修改）
 ├── temp/stamped/           # Phase 0 暫存區（gitignore）
 ├── output/                 # 產出結果與執行日誌（gitignore）
+├── archive/                # 歷史樣本與校正資料歸檔（gitignore）
 └── 印章/removebg/          # 已去背透明 PNG 印章（gitignore）
 ```
+
+- **領域模型**：[`CONTEXT.md`](./CONTEXT.md)
+- **需求規格**：[`docs/prds/document-processing.md`](./docs/prds/document-processing.md)、[`docs/prds/auto-printing.md`](./docs/prds/auto-printing.md)
 
 ---
 
@@ -124,7 +131,7 @@ uv sync --extra dev
 - **PowerShell**：`Verb-Noun` 命名。
 - **Commit 格式**：Conventional Commits（`feat:`, `fix:`, `docs:`, `refactor:`, `test:`）。
 - **Issue 關聯結案**：完工結案一律於 Commit message 中使用 GitHub 規範之 Closing Keywords（如 `closes #123`, `fixes #45`）。
-- **資安與脫敏**：禁止提交真實廠商文件或敏感採購資料；`input/`、`temp/`、`output/`、`印章/` 皆在 `.gitignore`；測試檔案僅使用脫敏樣本。
+- **資安與脫敏**：禁止提交真實廠商文件或敏感採購資料；`input/`、`temp/`、`output/`、`印章/`、`archive/` 皆在 `.gitignore`；測試檔案僅使用脫敏樣本。
 
 ---
 

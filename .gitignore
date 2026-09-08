@@ -40,19 +40,16 @@ output/
 # Claude Code 設定
 .claude/
 
-# 根目錄樣本檔案（僅供本地測試）
+# 根目錄防呆（防止測試與非受控檔案散落根目錄）
 /*.pdf
 /*.jpg
-/業旺明細*.xlsx
-/samples.xlsx
+/*.xlsx
+!/template.xlsx
+/*.zip
 
-# 壓縮檔
-*.zip
-
-# 印章資料夾（含用戶私人印章）
+# 印章資料夾（含私人透明圖檔）
 印章/
 
-# 暫存資料夾
-new/
+# 暫存與歷史歸檔
 temp/
-真實比例尺/
+archive/

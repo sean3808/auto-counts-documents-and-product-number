@@ -53,6 +53,19 @@ uv run python -m doc_processor all
 - 輸出 PDF/Excel 會寫入 `output/`。
 - Log 位置：`output/YYYYMMDD_HHMMSS.log`（執行結束後自動開啟）。
 
+## 目錄結構
+
+```
+auto-counts-documents-and-product-number/
+├── input/                  # 來源 PDF 放這裡（不遞迴子資料夾）
+├── 印章/removebg/          # 透明印章 PNG
+├── template.xlsx           # Excel 明細模板
+├── output/                 # 輸出 PDF 與明細 Excel
+├── docs/                   # 需求規格與開發文件
+├── archive/                # 歷史樣本與校正歸檔
+└── src/doc_processor/      # 核心程式碼
+```
+
 ## 處理流程
 
 ### Phase 0：PDF 蓋章
@@ -87,3 +100,11 @@ uv run python -m doc_processor all
 ```powershell
 uv run pytest tests/ -v
 ```
+
+## 文件與規格
+
+- [專案開發指南 (AGENTS.md)](./AGENTS.md)
+- [領域模型詞彙表 (CONTEXT.md)](./CONTEXT.md)
+- [單據重組與蓋章需求規格 (PRD)](./docs/prds/document-processing.md)
+- [自動列印規格 (PRD)](./docs/prds/auto-printing.md)
+
