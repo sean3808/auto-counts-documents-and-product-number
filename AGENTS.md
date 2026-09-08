@@ -107,7 +107,7 @@ auto-counts-documents-and-product-number/
 uv run python -m doc_processor [phase0 | phase1 | phase2 | all]
 uv run python -m doc_processor all --stamps "./印章/removebg"
 
-# 執行測試（60 個測試案例全數通過）
+# 執行測試（79 個測試案例全數通過）
 uv run pytest tests/ -v
 uv run pytest tests/test_pdf_parser.py -v
 
