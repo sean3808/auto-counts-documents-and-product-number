@@ -47,8 +47,11 @@ output/
 !/template.xlsx
 /*.zip
 
-# 印章資料夾（含私人透明圖檔）
-印章/
+# 印章資料夾：納管產線已去背透明 PNG，其餘未去背原圖、壓縮包與非 PNG 持續排除
+印章/*
+!印章/removebg/
+印章/removebg/*
+!印章/removebg/*.png
 
 # 暫存與歷史歸檔
 temp/

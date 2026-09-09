@@ -128,10 +128,10 @@ class TestTextileEndToEnd:
                 diff_x = abs(act_center_x - exp_center_x)
                 diff_y = abs(act_center_y - exp_center_y)
 
-                # 進料檢驗章（寬度 > 100 pt）因等比例縮放高為 153 pt（原目標框高 166.7 pt），中心 y 偏移約 6.8 pt
+                # 進料檢驗章（寬度 > 100 pt）因等比例縮放高為 153 pt（原目標框高 166.7 pt），中心 y 偏移約 6.8 pt，加計 ±3pt 自然化抖動上限約 9.8 pt
                 is_inspection = act_rect.width > 100
                 max_diff_x = 5.5
-                max_diff_y = 8.5 if is_inspection else 4.5
+                max_diff_y = 10.0 if is_inspection else 4.5
 
                 assert diff_x <= max_diff_x, (
                     f"{actual_name} 印章中心 x 偏移 {diff_x:.2f} pt 超出容許公差"

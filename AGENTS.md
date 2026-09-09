@@ -89,7 +89,7 @@ auto-counts-documents-and-product-number/
 ├── temp/stamped/           # Phase 0 暫存區（gitignore）
 ├── output/                 # 產出結果與執行日誌（gitignore）
 ├── archive/                # 歷史樣本與校正資料歸檔（gitignore）
-└── 印章/removebg/          # 已去背透明 PNG 印章（gitignore）
+└── 印章/removebg/          # 已去背透明 PNG 印章（Git 納管）
 ```
 
 - **領域模型**：[`CONTEXT.md`](./CONTEXT.md)
@@ -107,7 +107,7 @@ auto-counts-documents-and-product-number/
 uv run python -m doc_processor [phase0 | phase1 | phase2 | all]
 uv run python -m doc_processor all --stamps "./印章/removebg"
 
-# 執行測試（82 個測試案例全數通過）
+# 執行測試（88 個測試案例全數通過）
 uv run pytest tests/ -v
 uv run pytest tests/test_pdf_parser.py -v
 
@@ -133,7 +133,7 @@ uv sync --extra dev
 - **PowerShell**：`Verb-Noun` 命名。
 - **Commit 格式**：Conventional Commits（`feat:`, `fix:`, `docs:`, `refactor:`, `test:`）。
 - **Issue 關聯結案**：完工結案一律於 Commit message 中使用 GitHub 規範之 Closing Keywords（如 `closes #123`, `fixes #45`）。
-- **資安與脫敏**：禁止提交真實廠商文件或敏感採購資料；`input/`、`temp/`、`output/`、`印章/`、`archive/` 皆在 `.gitignore`；測試檔案僅使用脫敏樣本。
+- **資安與脫敏**：禁止提交真實廠商文件或敏感採購資料；`input/`、`temp/`、`output/`、`印章/`（除 `印章/removebg/*.png` 產線圖檔外）、`archive/` 皆在 `.gitignore`；測試檔案僅使用脫敏樣本。
 
 ---
 
