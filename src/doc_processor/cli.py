@@ -65,52 +65,37 @@ def main() -> int:
 
     # 執行指定的階段
     if args.command == "phase0":
-        result = run_phase0(args.input, args.temp, args.stamps, logger)
-        logger.write_summary()
-        _print_log_path(logger)
-        return result
+        exit_code = run_phase0(args.input, args.temp, args.stamps, logger)
 
     elif args.command == "phase1":
         # Phase 1 單獨執行時，從 input 讀取（向後兼容）
-        result = run_phase1(args.input, args.output, logger)
-        logger.write_summary()
-        _print_log_path(logger)
-        return result
+        exit_code = run_phase1(args.input, args.output, logger)
 
     elif args.command == "phase2":
-        result = run_phase2(args.output, args.template, logger)
-        logger.write_summary()
-        _print_log_path(logger)
-        return result
+        exit_code = run_phase2(args.output, args.template, logger)
 
     elif args.command == "all":
         # 依序執行 Phase 0 + Phase 1 + Phase 2
-        exit_code_0 = run_phase0(args.input, args.temp, args.stamps, logger)
+        exit_code = run_phase0(args.input, args.temp, args.stamps, logger)
 
-        if exit_code_0 == 2:
-            logger.write_summary()
-            _print_log_path(logger)
-            return exit_code_0
+        if exit_code != 2:
+            # Phase 1 從 temp/stamped 讀取
+            exit_code_1 = run_phase1(
+                args.temp, args.output, logger, is_continuation=True
+            )
+            exit_code = max(exit_code, exit_code_1)
 
-        # Phase 1 從 temp/stamped 讀取
-        exit_code_1 = run_phase1(
-            args.temp, args.output, logger, is_continuation=True
-        )
+            if exit_code_1 != 2:
+                exit_code_2 = run_phase2(
+                    args.output, args.template, logger, is_continuation=True
+                )
+                exit_code = max(exit_code, exit_code_2)
+    else:
+        exit_code = 0
 
-        if exit_code_1 == 2:
-            logger.write_summary()
-            _print_log_path(logger)
-            return max(exit_code_0, exit_code_1)
-
-        exit_code_2 = run_phase2(
-            args.output, args.template, logger, is_continuation=True
-        )
-
-        logger.write_summary()
-        _print_log_path(logger)
-        return max(exit_code_0, exit_code_1, exit_code_2)
-
-    return 0
+    logger.write_summary()
+    _print_log_path(logger)
+    return exit_code
 
 
 def _print_log_path(logger: ProcessLogger) -> None:

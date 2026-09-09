@@ -1,6 +1,7 @@
 """產線印章圖檔完整性與資產規範測試"""
 
 from pathlib import Path
+
 from PIL import Image
 
 STAMPS_REMOVEBG_DIR = Path("印章/removebg")

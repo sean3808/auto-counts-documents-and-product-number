@@ -50,9 +50,6 @@ from .stamper.receiving import (
     STAMP_CONFIG_CREATOR as RCV_CREATOR_CONFIG,
 )
 from .stamper.receiving import (
-    STAMP_CONFIG_INSPECTION as RCV_INSPECTION_CONFIG,
-)
-from .stamper.receiving import (
     STAMP_CONFIG_WAREHOUSE as RCV_WAREHOUSE_CONFIG,
 )
 from .stamper.receiving import (
@@ -218,38 +215,39 @@ def _process_receiving(
         # 依全文件文字辨識業務類別，避免多頁單據後續頁面因未重複關鍵字而誤判
         full_text = "\n".join(page.get_text() for page in doc)
         category = detect_business_category(full_text)
+        is_textile = category == BusinessCategory.TEXTILE
 
         # 預先檢查印章存在性並記錄日誌
         inspection_stamp_path = stamps_dir / RCV_INSPECTION_STAMP
-        if category == BusinessCategory.TEXTILE:
-            if not inspection_stamp_path.exists():
+        has_inspection = False
+        if is_textile:
+            has_inspection = inspection_stamp_path.exists()
+            if not has_inspection:
                 logger.info(f"找不到印章: {RCV_INSPECTION_STAMP}")
             warehouse_stamp_path = stamps_dir / RCV_TEXTILE_WAREHOUSE_STAMP
         else:
             warehouse_stamp_path = stamps_dir / RCV_WAREHOUSE_STAMP
 
-        warehouse_exists = warehouse_stamp_path.exists()
-        if not warehouse_exists:
+        common_stamps: list[tuple[Path, StampConfig]] = []
+        if warehouse_stamp_path.exists():
+            common_stamps.append((warehouse_stamp_path, RCV_WAREHOUSE_CONFIG))
+        else:
             logger.info(f"找不到印章: {warehouse_stamp_path.name}")
 
         creator_stamp_path = stamps_dir / RCV_CREATOR_STAMP
-        creator_exists = creator_stamp_path.exists()
-        if not creator_exists:
+        if creator_stamp_path.exists():
+            common_stamps.append((creator_stamp_path, RCV_CREATOR_CONFIG))
+        else:
             logger.info(f"找不到印章: {RCV_CREATOR_STAMP}")
 
         for page in doc:
             page_stamps: list[tuple[Path, StampConfig]] = []
-            if category == BusinessCategory.TEXTILE and inspection_stamp_path.exists():
+            if has_inspection:
                 # 紡織類：進料檢驗章依當頁品項動態自適應垂直座標
                 insp_config = get_inspection_stamp_config(page)
                 page_stamps.append((inspection_stamp_path, insp_config))
 
-            if warehouse_exists:
-                page_stamps.append((warehouse_stamp_path, RCV_WAREHOUSE_CONFIG))
-
-            if creator_exists:
-                page_stamps.append((creator_stamp_path, RCV_CREATOR_CONFIG))
-
+            page_stamps.extend(common_stamps)
             _apply_stamps_to_page(page, page_stamps)
 
         doc.save(output_path)

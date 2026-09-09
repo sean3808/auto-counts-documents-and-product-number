@@ -235,7 +235,7 @@ class TestRunPhase0:
         assert len(images) == 2
 
         # 檢查日誌中有記錄找不到印章
-        log_file = list(setup_dirs["log_dir"].glob("*.log"))[0]
+        log_file = next(iter(setup_dirs["log_dir"].glob("*.log")))
         log_text = log_file.read_text(encoding="utf-8")
         assert "找不到印章: 莊宛恬.png" in log_text
 

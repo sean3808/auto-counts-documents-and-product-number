@@ -462,6 +462,7 @@ class TestTextileEndToEnd:
             encoding="utf-8",
             errors="replace",
             env=env,
+            check=False,
         )
         assert proc.returncode == 0, f"CLI 執行失敗: {proc.stderr}\n{proc.stdout}"
 

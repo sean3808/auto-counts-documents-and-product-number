@@ -1,6 +1,7 @@
 """進貨驗收單蓋章模組"""
 
 import re
+import shutil
 from pathlib import Path
 
 import fitz
@@ -87,8 +88,7 @@ def calculate_inspection_stamp_y(page: fitz.Page) -> float:
 
             matched = False
             if seq_matches:
-                for m in seq_matches:
-                    item_numbers.add(m)
+                item_numbers.update(seq_matches)
                 matched = True
             elif (
                 "註:對方品名" in line_text
@@ -188,10 +188,8 @@ def stamp_receiving(
     if creator_stamp_path.exists():
         stamps.append((creator_stamp_path, STAMP_CONFIG_CREATOR))
 
-    if stamps:
-        stamp_pdf(input_path, output_path, stamps, remove_background=remove_background)
-    else:
-        # 無印章時直接複製
-        import shutil
-
+    if not stamps:
         shutil.copy(input_path, output_path)
+        return
+
+    stamp_pdf(input_path, output_path, stamps, remove_background=remove_background)
