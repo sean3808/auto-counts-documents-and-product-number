@@ -10,9 +10,13 @@ from doc_processor.stamper.receiving import (
     DEFAULT_INSPECTION_STAMP,
     DEFAULT_TEXTILE_WAREHOUSE_STAMP,
     DEFAULT_WAREHOUSE_STAMP,
+    INSPECTION_BASE_Y,
+    INSPECTION_MAX_Y,
     STAMP_CONFIG_CREATOR,
     STAMP_CONFIG_INSPECTION,
     STAMP_CONFIG_WAREHOUSE,
+    calculate_inspection_stamp_y,
+    get_inspection_stamp_config,
     stamp_receiving,
 )
 
@@ -153,5 +157,152 @@ class TestStampReceiving:
         doc = fitz.open(output_path)
         images = doc[0].get_images()
         doc.close()
-        # 缺少莊宛恬時降級為 2 個印章（進料檢驗章 + 製單章）
         assert len(images) == 2
+
+    @pytest.mark.parametrize("item_count,expected_mode", [
+        (1, "base"),
+        (2, "base"),
+        (3, "shifted"),
+        (8, "clamped"),
+    ])
+    def test_stamp_receiving_textile_item_counts(
+        self, tmp_path: Path, stamps_dir: Path, item_count: int, expected_mode: str
+    ):
+        """測試紡織類進貨驗收單蓋章支援 1、2、3、8 項品項動態定位"""
+        pdf_path = create_textile_receiving_pdf(
+            tmp_path, item_count=item_count, filename=f"receiving_{item_count}.pdf"
+        )
+        output_path = tmp_path / f"output_{item_count}.pdf"
+
+        stamp_receiving(
+            input_path=pdf_path,
+            output_path=output_path,
+            stamps_dir=stamps_dir,
+            is_textile=True,
+        )
+
+        assert output_path.exists()
+        doc = fitz.open(output_path)
+        page = doc[0]
+        images = page.get_images()
+        assert len(images) == 3
+
+        img_rects = [page.get_image_rects(img[0])[0] for img in images]
+        inspection_rects = [r for r in img_rects if r.width > 100]
+        assert len(inspection_rects) == 1
+        r = inspection_rects[0]
+
+        if expected_mode == "base":
+            assert r.y0 == pytest.approx(INSPECTION_BASE_Y, abs=0.01)
+        elif expected_mode == "shifted":
+            assert r.y0 > INSPECTION_BASE_Y
+            assert r.y0 == pytest.approx(352.2, abs=5.0)
+        elif expected_mode == "clamped":
+            assert r.y0 == pytest.approx(INSPECTION_MAX_Y, abs=0.01)
+            assert r.y1 <= 730.01
+        doc.close()
+
+
+def create_textile_receiving_pdf(
+    tmp_path: Path, item_count: int, filename: str = "進貨驗收單~test.pdf"
+) -> Path:
+    """建立包含指定品項數量之紡織類進貨驗收單 PDF"""
+    pdf_path = tmp_path / filename
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=791)
+    page.insert_text((235, 40), "台灣業旺股份有限公司", fontname="china-t")
+    page.insert_text((270, 60), "進貨驗收單", fontname="china-t")
+    page.insert_text((17, 90), "供商代號：GL012", fontname="china-t")
+    page.insert_text((17, 110), "供商簡稱：金利多企", fontname="china-t")
+    page.insert_text(
+        (17, 165),
+        "序號 產品代號 品名 採購數量 收貨數量 驗收數量 驗退數量單位 驗收日 庫別",
+        fontname="china-t",
+    )
+    page.insert_text((484, 165), "碼", fontname="china-t")
+
+    y = 180
+    for i in range(1, item_count + 1):
+        seq_str = f"{i:04d}"
+        page.insert_text(
+            (17, y),
+            f"{seq_str} WG7X0{i} JAC胚布[J7X0{i}] 2,500.0000 1,479.0000 1,479.0000 0.0000 碼 115/09/02 東齊",
+            fontname="china-t",
+        )
+        page.insert_text((48, y + 20), f"註:對方品名-布種_{i}", fontname="china-t")
+        y += 50
+    page.insert_text((48, y), "以下空白", fontname="china-t")
+
+    page.insert_text(
+        (17, 745),
+        "主　管 倉　管： 人　員 倉　管： 主　管 驗　收： 人　員 驗　收： 人　員 製　單：",
+        fontname="china-t",
+    )
+    doc.save(pdf_path)
+    doc.close()
+    return pdf_path
+
+
+class TestCalculateInspectionStampY:
+    """進料檢驗章自適應垂直座標計算測試"""
+
+    def test_adaptive_y_1_item_returns_base_y(self, tmp_path: Path):
+        """單頁 1 項品項時維持基準座標 (y=270.4 pt)"""
+        pdf_path = create_textile_receiving_pdf(tmp_path, item_count=1)
+        doc = fitz.open(pdf_path)
+        y = calculate_inspection_stamp_y(doc[0])
+        doc.close()
+        assert y == pytest.approx(INSPECTION_BASE_Y, abs=0.01)
+
+    def test_adaptive_y_2_items_returns_base_y(self, tmp_path: Path):
+        """單頁 2 項品項時維持基準座標 (y=270.4 pt)"""
+        pdf_path = create_textile_receiving_pdf(tmp_path, item_count=2)
+        doc = fitz.open(pdf_path)
+        y = calculate_inspection_stamp_y(doc[0])
+        doc.close()
+        assert y == pytest.approx(INSPECTION_BASE_Y, abs=0.01)
+
+    def test_adaptive_y_3_items_shifts_down(self, tmp_path: Path):
+        """單頁 3 項品項時向下順推至品項內容底緣下方 +20 pt"""
+        pdf_path = create_textile_receiving_pdf(tmp_path, item_count=3)
+        doc = fitz.open(pdf_path)
+        y = calculate_inspection_stamp_y(doc[0])
+        doc.close()
+        assert y > INSPECTION_BASE_Y
+        assert y == pytest.approx(352.2, abs=5.0)
+
+    def test_adaptive_y_8_items_clamps_at_max_y(self, tmp_path: Path):
+        """密集品項（8 項）時觸發上限截斷 (y <= 563.3 pt)，確保底緣在 730 pt 之前且不侵犯簽核欄 (y=735.5 pt)"""
+        pdf_path = create_textile_receiving_pdf(tmp_path, item_count=8)
+        doc = fitz.open(pdf_path)
+        y = calculate_inspection_stamp_y(doc[0])
+        doc.close()
+        assert y == pytest.approx(INSPECTION_MAX_Y, abs=0.01)
+        assert y + STAMP_CONFIG_INSPECTION.target_height <= 730.01
+
+    def test_adaptive_y_empty_or_no_items(self, tmp_path: Path):
+        """無品項頁面時維持基準座標 (y=270.4 pt)"""
+        pdf_path = tmp_path / "empty.pdf"
+        doc = fitz.open()
+        page = doc.new_page(width=612, height=791)
+        page.insert_text((100, 100), "進貨驗收單", fontname="china-t")
+        doc.save(pdf_path)
+        doc.close()
+
+        doc = fitz.open(pdf_path)
+        y = calculate_inspection_stamp_y(doc[0])
+        doc.close()
+        assert y == pytest.approx(INSPECTION_BASE_Y, abs=0.01)
+
+    def test_get_inspection_stamp_config(self, tmp_path: Path):
+        """測試 get_inspection_stamp_config 回傳包含動態 y 的 StampConfig"""
+        pdf_path = create_textile_receiving_pdf(tmp_path, item_count=3)
+        doc = fitz.open(pdf_path)
+        config = get_inspection_stamp_config(doc[0])
+        doc.close()
+        assert config.x == pytest.approx(40.5, abs=0.01)
+        assert config.y > 270.4
+        assert config.target_width == pytest.approx(221.4, abs=0.01)
+        assert config.target_height == pytest.approx(166.7, abs=0.01)
+        assert config.remove_background is False
+

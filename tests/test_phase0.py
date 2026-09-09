@@ -239,6 +239,60 @@ class TestRunPhase0:
         log_text = log_file.read_text(encoding="utf-8")
         assert "找不到印章: 莊宛恬.png" in log_text
 
+    @pytest.mark.parametrize("item_count,expected_mode", [
+        (1, "base"),
+        (2, "base"),
+        (3, "shifted"),
+        (8, "clamped"),
+    ])
+    def test_phase0_receiving_textile_item_counts(
+        self, setup_dirs, item_count: int, expected_mode: str
+    ):
+        """測試 Phase 0 紡織類進貨驗收單蓋章支援 1、2、3、8 項品項動態定位與簽核欄邊界防呆"""
+        from test_stamper_receiving import create_textile_receiving_pdf
+
+        create_textile_receiving_pdf(
+            setup_dirs["input_dir"],
+            item_count=item_count,
+            filename=f"進貨驗收單~textile_{item_count}.pdf",
+        )
+
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+        assert result == 0
+
+        output_file = setup_dirs["output_dir"] / f"進貨驗收單~textile_{item_count}.pdf"
+        assert output_file.exists()
+
+        doc = fitz.open(output_file)
+        page = doc[0]
+        images = page.get_images()
+        assert len(images) == 3
+
+        img_rects = [page.get_image_rects(img[0])[0] for img in images]
+        inspection_rects = [r for r in img_rects if r.width > 100]
+        assert len(inspection_rects) == 1
+        r = inspection_rects[0]
+
+        # 自然化抖動範圍：y ∈ [-3, +3]
+        if expected_mode == "base":
+            assert 270.4 - 3.5 <= r.y0 <= 270.4 + 3.5
+        elif expected_mode == "shifted":
+            # 3 項品項動態下移，明顯大於基準座標
+            assert r.y0 > 270.4 + 3.5
+            assert 352.2 - 3.5 - 5.0 <= r.y0 <= 352.2 + 3.5 + 5.0
+        elif expected_mode == "clamped":
+            # 8 項品項觸發上限截斷，且底緣絕不侵犯底部簽核欄 (y=735.5)
+            assert 563.3 - 3.5 <= r.y0 <= 563.3 + 3.5
+            assert r.y1 <= 730.0 + 3.5
+            assert r.y1 < 735.5
+        doc.close()
+
     def test_phase0_missing_stamps_folder(self, setup_dirs, sample_purchase_order):
         """測試印章資料夾不存在時應複製 PDF"""
         import shutil
