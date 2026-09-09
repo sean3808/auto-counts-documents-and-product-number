@@ -79,7 +79,7 @@ class TestTextileEndToEnd:
             "採購單~1 1.pdf": "採購單_1.pdf",
             "請購單~2 1.pdf": "請購單_2.pdf",
             "進貨單~2 1.pdf": "進貨單_2.pdf",
-            "進貨驗收單~2 1.pdf": "進貨驗收單_2.pdf",
+            "進貨驗收單~2 1.pdf": "進貨驗收單_2_NEW.pdf",
         }
 
         for actual_name, expected_name in file_mapping.items():
@@ -106,8 +106,8 @@ class TestTextileEndToEnd:
             )
 
             if actual_name == "進貨驗收單~2 1.pdf":
-                # 紡織類進貨驗收單應有 2 個印章：進料檢驗章與製單章，嚴格排除倉管章
-                assert len(act_images) == 2, "紡織類進貨驗收單應只有 2 個印章"
+                # 紡織類進貨驗收單應有 3 個印章：進料檢驗章、莊宛恬倉管章與製單章
+                assert len(act_images) == 3, "紡織類進貨驗收單應有 3 個印章"
 
             # 取得各圖片的顯示矩形並依 x 座標排序
             act_rects = sorted(
@@ -128,10 +128,10 @@ class TestTextileEndToEnd:
                 diff_x = abs(act_center_x - exp_center_x)
                 diff_y = abs(act_center_y - exp_center_y)
 
-                # 進料檢驗章（寬度 > 100 pt）因等比例縮放高為 153 pt（原目標框高 166.7 pt），中心 y 偏移約 6.8 pt，加計 ±3pt 自然化抖動上限約 9.8 pt
+                # 進料檢驗章（寬度 > 100 pt）因等比例縮放高為 153 pt（原目標框高 166.7 pt），中心 y 偏移約 6.8 pt，加計 ±3pt 自然化抖動上限約 9.8 pt；個人職章自然化抖動 x∈[-4, +4], y∈[-3, +3]，兩獨立隨機本中心差上限分別為 8.5 pt 與 7.5 pt
                 is_inspection = act_rect.width > 100
-                max_diff_x = 5.5
-                max_diff_y = 10.0 if is_inspection else 4.5
+                max_diff_x = 10.0 if is_inspection else 8.5
+                max_diff_y = 10.0 if is_inspection else 7.5
 
                 assert diff_x <= max_diff_x, (
                     f"{actual_name} 印章中心 x 偏移 {diff_x:.2f} pt 超出容許公差"
@@ -149,11 +149,17 @@ class TestTextileEndToEnd:
                         f"{actual_name} 進料檢驗章高度應在 [148, 170] pt 範圍內"
                     )
                 else:
-                    assert abs(act_rect.width - 32.1) <= 3.5, (
-                        f"{actual_name} 職章寬度應約 32.1 pt"
+                    assert any(
+                        abs(act_rect.width - target_w) <= 3.5
+                        for target_w in (32.1, 28.0)
+                    ), (
+                        f"{actual_name} 職章寬度應約 32.1 pt 或 28.0 pt (實際: {act_rect.width:.1f})"
                     )
-                    assert abs(act_rect.height - 17.3) <= 3.5, (
-                        f"{actual_name} 職章高度應約 17.3 pt"
+                    assert any(
+                        abs(act_rect.height - target_h) <= 3.5
+                        for target_h in (17.3, 17.0)
+                    ), (
+                        f"{actual_name} 職章高度應約 17.3 pt 或 17.0 pt (實際: {act_rect.height:.1f})"
                     )
 
             act_doc.close()

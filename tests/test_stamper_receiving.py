@@ -8,6 +8,8 @@ from PIL import Image
 
 from doc_processor.stamper.receiving import (
     DEFAULT_INSPECTION_STAMP,
+    DEFAULT_TEXTILE_WAREHOUSE_STAMP,
+    DEFAULT_WAREHOUSE_STAMP,
     STAMP_CONFIG_CREATOR,
     STAMP_CONFIG_INSPECTION,
     STAMP_CONFIG_WAREHOUSE,
@@ -41,6 +43,14 @@ class TestReceivingStampConfigs:
     def test_default_inspection_stamp(self):
         """測試預設進料檢驗章檔名"""
         assert DEFAULT_INSPECTION_STAMP == "紡織進料檢.png"
+
+    def test_default_warehouse_stamp(self):
+        """測試預設染料類倉管章檔名"""
+        assert DEFAULT_WAREHOUSE_STAMP == "簡銘佑.png"
+
+    def test_default_textile_warehouse_stamp(self):
+        """測試預設紡織類倉管章檔名"""
+        assert DEFAULT_TEXTILE_WAREHOUSE_STAMP == "莊宛恬.png"
 
 
 class TestStampReceiving:
@@ -76,6 +86,8 @@ class TestStampReceiving:
         # 建立個人章
         warehouse_stamp = Image.new("RGBA", (99, 190), (255, 0, 0, 128))
         warehouse_stamp.save(stamps / "簡銘佑.png")
+        textile_warehouse_stamp = Image.new("RGBA", (99, 190), (255, 0, 0, 128))
+        textile_warehouse_stamp.save(stamps / "莊宛恬.png")
         creator_stamp = Image.new("RGBA", (106, 56), (0, 255, 0, 128))
         creator_stamp.save(stamps / "雅萍.png")
         # 建立進料檢驗章（白色背景表格）
@@ -106,7 +118,7 @@ class TestStampReceiving:
     def test_stamp_receiving_textile(
         self, textile_pdf: Path, stamps_dir: Path, tmp_path: Path
     ):
-        """測試紡織類進貨驗收單蓋章（進料檢驗章 + 製單章，排除倉管章）"""
+        """測試紡織類進貨驗收單蓋章（進料檢驗章 + 莊宛恬倉管章 + 製單章）"""
         output_path = tmp_path / "output_textile.pdf"
 
         stamp_receiving(
@@ -120,5 +132,26 @@ class TestStampReceiving:
         doc = fitz.open(output_path)
         images = doc[0].get_images()
         doc.close()
-        # 應有 2 個印章：進料檢驗章 + 製單人員（嚴格排除倉管人員）
+        # 應有 3 個印章：進料檢驗章 + 莊宛恬倉管章 + 製單人員
+        assert len(images) == 3
+
+    def test_stamp_receiving_textile_missing_warehouse_stamp(
+        self, textile_pdf: Path, stamps_dir: Path, tmp_path: Path
+    ):
+        """測試缺少莊宛恬印章時優雅降級（僅蓋進料檢驗章與製單章）"""
+        (stamps_dir / "莊宛恬.png").unlink()
+        output_path = tmp_path / "output_textile_missing.pdf"
+
+        stamp_receiving(
+            input_path=textile_pdf,
+            output_path=output_path,
+            stamps_dir=stamps_dir,
+            is_textile=True,
+        )
+
+        assert output_path.exists()
+        doc = fitz.open(output_path)
+        images = doc[0].get_images()
+        doc.close()
+        # 缺少莊宛恬時降級為 2 個印章（進料檢驗章 + 製單章）
         assert len(images) == 2

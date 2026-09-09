@@ -41,6 +41,9 @@ from .stamper.receiving import (
     DEFAULT_INSPECTION_STAMP as RCV_INSPECTION_STAMP,
 )
 from .stamper.receiving import (
+    DEFAULT_TEXTILE_WAREHOUSE_STAMP as RCV_TEXTILE_WAREHOUSE_STAMP,
+)
+from .stamper.receiving import (
     DEFAULT_WAREHOUSE_STAMP as RCV_WAREHOUSE_STAMP,
 )
 from .stamper.receiving import (
@@ -215,13 +218,14 @@ def _process_receiving(
 
         stamps: list[tuple[Path, StampConfig]] = []
         if category == BusinessCategory.TEXTILE:
-            # 紡織類：進料檢驗章 + 製單章（嚴格排除倉管章）
+            # 紡織類：進料檢驗章 + 倉管章（莊宛恬） + 製單章
             stamp_candidates = [
                 (stamps_dir / RCV_INSPECTION_STAMP, RCV_INSPECTION_CONFIG),
+                (stamps_dir / RCV_TEXTILE_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
                 (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),
             ]
         else:
-            # 染料類：倉管章 + 製單章
+            # 染料類：倉管章（簡銘佑） + 製單章
             stamp_candidates = [
                 (stamps_dir / RCV_WAREHOUSE_STAMP, RCV_WAREHOUSE_CONFIG),
                 (stamps_dir / RCV_CREATOR_STAMP, RCV_CREATOR_CONFIG),

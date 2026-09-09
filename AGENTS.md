@@ -22,7 +22,7 @@ input/*.pdf (+ 印章/removebg/) ➔ Phase 0 (蓋章) ➔ temp/stamped/ ➔ Phas
    - **採購單**：承辦人章（雅萍）+ 依內文抽取之供商代號蓋對應供應商章。
    - **進貨驗收單**：
      - **染料類**：倉管章（簡銘佑）+ 製單章（雅萍）。
-     - **紡織類**：進料檢驗章（紡織進料檢，免去背）+ 製單章（雅萍），不蓋倉管章。
+     - **紡織類**：進料檢驗章（紡織進料檢，免去背）+ 倉管章（莊宛恬）+ 製單章（雅萍）。
    - **進貨單**：製單章（雅萍）。
    - **請購單**：製單章（雅萍）。
 3. **影像自然化**：每頁印章隨機微旋轉（-3° ~ +3°）與隨機對稱微位移（x: -4~+4pt、y: -3~+3pt）。
@@ -107,7 +107,7 @@ auto-counts-documents-and-product-number/
 uv run python -m doc_processor [phase0 | phase1 | phase2 | all]
 uv run python -m doc_processor all --stamps "./印章/removebg"
 
-# 執行測試（88 個測試案例全數通過）
+# 執行測試（92 個測試案例全數通過）
 uv run pytest tests/ -v
 uv run pytest tests/test_pdf_parser.py -v
 

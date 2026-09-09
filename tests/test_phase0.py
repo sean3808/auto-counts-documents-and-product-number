@@ -33,6 +33,9 @@ class TestRunPhase0:
         warehouse_stamp = Image.new("RGBA", (99, 60), (0, 255, 0, 128))
         warehouse_stamp.save(stamps_dir / "簡銘佑.png")
 
+        textile_warehouse_stamp = Image.new("RGBA", (99, 60), (0, 255, 0, 128))
+        textile_warehouse_stamp.save(stamps_dir / "莊宛恬.png")
+
         vendor_stamp = Image.new("RGBA", (200, 150), (0, 0, 255, 128))
         vendor_stamp.save(stamps_dir / "TW111.png")
 
@@ -133,7 +136,7 @@ class TestRunPhase0:
         assert len(images) == 2  # 倉管章 + 製單章
 
     def test_phase0_receiving_textile(self, setup_dirs, sample_textile_receiving):
-        """測試紡織類進貨驗收單蓋章（進料檢驗章 + 製單章，排除倉管章）"""
+        """測試紡織類進貨驗收單蓋章（進料檢驗章 + 莊宛恬倉管章 + 製單章）"""
         logger = ProcessLogger(setup_dirs["log_dir"])
         result = run_phase0(
             setup_dirs["input_dir"],
@@ -149,8 +152,8 @@ class TestRunPhase0:
         doc = fitz.open(output_file)
         page = doc[0]
         images = page.get_images()
-        # 應有 2 個印章：進料檢驗章 + 製單章
-        assert len(images) == 2
+        # 應有 3 個印章：進料檢驗章 + 莊宛恬倉管章 + 製單章
+        assert len(images) == 3
 
         # 驗證進料檢驗章的位置（基準 x=40.5, y=270.4，微抖動 x∈[-4, 4], y∈[-3, 3]）
         img_rects = [page.get_image_rects(img[0])[0] for img in images]
@@ -159,10 +162,17 @@ class TestRunPhase0:
         assert len(inspection_rects) == 1
         r = inspection_rects[0]
         assert 35.0 <= r.x0 <= 46.0  # 40.5 ± 4 + tolerance
+
+        # 莊宛恬倉管章（基準座標 x=176.1, y=743.3，尺寸 28.0 × 17.0 pt，自然化抖動 x±4, y±3）
+        warehouse_rects = [
+            r for r in img_rects
+            if abs(r.x0 - 176.1) <= 10.0 and abs(r.y0 - 743.3) <= 10.0
+        ]
+        assert len(warehouse_rects) == 1
         doc.close()
 
     def test_phase0_receiving_textile_multipage(self, setup_dirs):
-        """測試多頁紡織類進貨驗收單蓋章（續頁未重複品名/碼仍正確辨識為紡織類，不蓋倉管章）"""
+        """測試多頁紡織類進貨驗收單蓋章（續頁未重複品名/碼仍正確辨識為紡織類，每頁蓋 3 枚印章含莊宛恬）"""
         pdf_path = setup_dirs["input_dir"] / "進貨驗收單~textile_multipage.pdf"
         doc = fitz.open()
         # 第 1 頁：含紡織特徵
@@ -197,9 +207,37 @@ class TestRunPhase0:
         assert len(out_doc) == 2
         for page_idx, page in enumerate(out_doc):
             images = page.get_images()
-            # 每一頁皆應蓋 2 個章（進料檢驗章 + 製單章），嚴格排除簡銘佑倉管章
-            assert len(images) == 2, f"第 {page_idx} 頁印章數應為 2（排除倉管章）"
+            # 每一頁皆應蓋 3 個章（進料檢驗章 + 莊宛恬倉管章 + 製單章）
+            assert len(images) == 3, f"第 {page_idx} 頁印章數應為 3（含莊宛恬倉管章）"
         out_doc.close()
+
+    def test_phase0_receiving_textile_missing_warehouse_stamp(
+        self, setup_dirs, sample_textile_receiving
+    ):
+        """測試紡織類進貨驗收單缺少莊宛恬圖檔時有適當日誌並優雅降級"""
+        (setup_dirs["stamps_dir"] / "莊宛恬.png").unlink()
+        logger = ProcessLogger(setup_dirs["log_dir"])
+        result = run_phase0(
+            setup_dirs["input_dir"],
+            setup_dirs["output_dir"],
+            setup_dirs["stamps_dir"],
+            logger,
+        )
+
+        assert result == 0
+        output_file = setup_dirs["output_dir"] / "進貨驗收單~textile.pdf"
+        assert output_file.exists()
+
+        doc = fitz.open(output_file)
+        images = doc[0].get_images()
+        doc.close()
+        # 降級為 2 個印章（進料檢驗章 + 製單章）
+        assert len(images) == 2
+
+        # 檢查日誌中有記錄找不到印章
+        log_file = list(setup_dirs["log_dir"].glob("*.log"))[0]
+        log_text = log_file.read_text(encoding="utf-8")
+        assert "找不到印章: 莊宛恬.png" in log_text
 
     def test_phase0_missing_stamps_folder(self, setup_dirs, sample_purchase_order):
         """測試印章資料夾不存在時應複製 PDF"""

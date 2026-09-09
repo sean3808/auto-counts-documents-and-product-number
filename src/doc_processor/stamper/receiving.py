@@ -30,6 +30,7 @@ STAMP_CONFIG_INSPECTION = StampConfig(
 
 # 預設印章檔名
 DEFAULT_WAREHOUSE_STAMP = "簡銘佑.png"
+DEFAULT_TEXTILE_WAREHOUSE_STAMP = "莊宛恬.png"
 DEFAULT_CREATOR_STAMP = "雅萍.png"
 DEFAULT_INSPECTION_STAMP = "紡織進料檢.png"
 
@@ -41,6 +42,7 @@ def stamp_receiving(
     warehouse_stamp_name: str = DEFAULT_WAREHOUSE_STAMP,
     creator_stamp_name: str = DEFAULT_CREATOR_STAMP,
     inspection_stamp_name: str = DEFAULT_INSPECTION_STAMP,
+    textile_warehouse_stamp_name: str = DEFAULT_TEXTILE_WAREHOUSE_STAMP,
     remove_background: bool = True,
     is_textile: bool | None = None,
 ) -> None:
@@ -51,9 +53,10 @@ def stamp_receiving(
         input_path: 輸入 PDF 路徑
         output_path: 輸出 PDF 路徑
         stamps_dir: 印章資料夾路徑
-        warehouse_stamp_name: 倉管人員印章檔名
+        warehouse_stamp_name: 染料類倉管人員印章檔名
         creator_stamp_name: 製單人員印章檔名
         inspection_stamp_name: 進料檢驗印章檔名
+        textile_warehouse_stamp_name: 紡織類倉管人員印章檔名
         remove_background: 是否自動去除印章白色背景（預設 True；進料檢驗章原圖免去背）
         is_textile: 是否為紡織類單據。若為 None 則自動依文字層判定
     """
@@ -70,23 +73,23 @@ def stamp_receiving(
     stamps: list[tuple[Path, StampConfig]] = []
 
     if is_textile:
-        # 紡織類：進料檢驗章 + 製單人員章（嚴格排除倉管人員章）
+        # 紡織類：進料檢驗章
         inspection_stamp_path = stamps_dir / inspection_stamp_name
         if inspection_stamp_path.exists():
             stamps.append((inspection_stamp_path, STAMP_CONFIG_INSPECTION))
-
-        creator_stamp_path = stamps_dir / creator_stamp_name
-        if creator_stamp_path.exists():
-            stamps.append((creator_stamp_path, STAMP_CONFIG_CREATOR))
+        warehouse_stamp_path = stamps_dir / textile_warehouse_stamp_name
     else:
-        # 染料類：倉管人員章 + 製單人員章
+        # 染料類：簡銘佑倉管章
         warehouse_stamp_path = stamps_dir / warehouse_stamp_name
-        if warehouse_stamp_path.exists():
-            stamps.append((warehouse_stamp_path, STAMP_CONFIG_WAREHOUSE))
 
-        creator_stamp_path = stamps_dir / creator_stamp_name
-        if creator_stamp_path.exists():
-            stamps.append((creator_stamp_path, STAMP_CONFIG_CREATOR))
+    # 倉管人員章（染料類為簡銘佑，紡織類為莊宛恬）
+    if warehouse_stamp_path.exists():
+        stamps.append((warehouse_stamp_path, STAMP_CONFIG_WAREHOUSE))
+
+    # 製單人員章（雅萍）
+    creator_stamp_path = stamps_dir / creator_stamp_name
+    if creator_stamp_path.exists():
+        stamps.append((creator_stamp_path, STAMP_CONFIG_CREATOR))
 
     if stamps:
         stamp_pdf(input_path, output_path, stamps, remove_background=remove_background)
