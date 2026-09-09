@@ -48,6 +48,12 @@ def main() -> int:
         default=Path("./印章/removebg"),
         help="印章資料夾路徑（預設: ./印章/removebg）",
     )
+    parser.add_argument(
+        "--temp",
+        type=Path,
+        default=DEFAULT_TEMP_DIR,
+        help="暫存資料夾路徑（預設: ./temp/stamped）",
+    )
 
     args = parser.parse_args()
 
@@ -59,7 +65,7 @@ def main() -> int:
 
     # 執行指定的階段
     if args.command == "phase0":
-        result = run_phase0(args.input, DEFAULT_TEMP_DIR, args.stamps, logger)
+        result = run_phase0(args.input, args.temp, args.stamps, logger)
         logger.write_summary()
         _print_log_path(logger)
         return result
@@ -79,7 +85,7 @@ def main() -> int:
 
     elif args.command == "all":
         # 依序執行 Phase 0 + Phase 1 + Phase 2
-        exit_code_0 = run_phase0(args.input, DEFAULT_TEMP_DIR, args.stamps, logger)
+        exit_code_0 = run_phase0(args.input, args.temp, args.stamps, logger)
 
         if exit_code_0 == 2:
             logger.write_summary()
@@ -88,7 +94,7 @@ def main() -> int:
 
         # Phase 1 從 temp/stamped 讀取
         exit_code_1 = run_phase1(
-            DEFAULT_TEMP_DIR, args.output, logger, is_continuation=True
+            args.temp, args.output, logger, is_continuation=True
         )
 
         if exit_code_1 == 2:
